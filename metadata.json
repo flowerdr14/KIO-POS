@@ -1,5 +1,5 @@
 {
-  "name": "Kio - POS 포스 시스템",
+  "name": "KIO-POS",
   "description": "스타로벅스 입양2호점 매장 운영, 주문관리, 홀 테이블 관리, 주문계산, 메뉴관리 등 각 버튼의 모든 기능이 완벽하게 작동하는 POS 시스템",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
