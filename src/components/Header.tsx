@@ -1,0 +1,105 @@
+import React from 'react';
+import { usePos, MainTab } from '../context/PosContext';
+import { Volume2, VolumeX, Store, Clock } from 'lucide-react';
+
+export const Header: React.FC = () => {
+  const { activeTab, setActiveTab, shift, soundEnabled, setSoundEnabled } = usePos();
+
+  const navItems: { id: MainTab; label: string }[] = [
+    { id: 'ORDERS', label: '주문관리' },
+    { id: 'HALL', label: '홀 관리' },
+    { id: 'CHECKOUT', label: '주문계산' },
+    { id: 'MENUS', label: '메뉴관리' },
+  ];
+
+  return (
+    <header className="bg-[#8fb5de] border-b-2 border-[#6092c4] px-6 py-2.5 flex items-center justify-between shadow-sm select-none">
+      {/* Brand / Logo */}
+      <div className="flex items-center gap-4">
+        <button
+          id="btn-nav-dashboard"
+          onClick={() => setActiveTab('DASHBOARD')}
+          className="group text-left focus:outline-none transition-transform active:scale-95"
+          title="메인 대시보드로 이동"
+        >
+          <div className="flex flex-col leading-none">
+            <span
+              className="text-3xl font-black tracking-wider text-[#1e3a8a] drop-shadow-[2px_2px_0px_#ffffff]"
+              style={{ fontFamily: "'Fredoka', cursive, sans-serif" }}
+            >
+              Kio -
+            </span>
+            <span
+              className="text-2xl font-black tracking-widest text-[#1e3a8a] pl-6 -mt-1 drop-shadow-[2px_2px_0px_#ffffff]"
+              style={{ fontFamily: "'Fredoka', cursive, sans-serif" }}
+            >
+              POS
+            </span>
+          </div>
+        </button>
+
+        {/* Dashboard quick pill */}
+        <button
+          onClick={() => setActiveTab('DASHBOARD')}
+          className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${
+            activeTab === 'DASHBOARD'
+              ? 'bg-[#1e40af] text-white shadow-inner'
+              : 'bg-[#a3c4e8] text-[#1e3a8a] hover:bg-[#b5d2f3]'
+          }`}
+        >
+          대시보드 홈
+        </button>
+      </div>
+
+      {/* Center Nav Tabs */}
+      <nav className="flex items-center space-x-6 md:space-x-10">
+        {navItems.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              id={`nav-tab-${tab.id.toLowerCase()}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`text-xl md:text-2xl font-bold px-6 py-2 rounded-md transition-all ${
+                isActive
+                  ? 'bg-[#2977ca] text-white shadow-md border-b-4 border-[#1c5594] scale-105'
+                  : 'text-[#183968] hover:bg-[#9cc1e7] hover:text-[#0f2952]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Right Branch & Status info */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className="p-1.5 text-[#1e3a8a] hover:bg-[#a0c5ea] rounded-full transition-colors"
+          title={soundEnabled ? '효과음 켜짐' : '효과음 음소거'}
+        >
+          {soundEnabled ? <Volume2 size={19} /> : <VolumeX size={19} className="opacity-60" />}
+        </button>
+
+        <div className="text-right">
+          <div className="text-sm font-extrabold text-[#194074] flex items-center justify-end gap-1.5">
+            <span>스타로벅스 입양2호점</span>
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                shift.isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+              }`}
+              title={shift.isOpen ? '영업중' : '영업종료/마감'}
+            />
+          </div>
+          <div className="text-[11px] font-semibold text-[#285794] flex items-center justify-end gap-1">
+            <span>(STAROBUX ADOPT2)</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/60 font-medium">
+              {shift.isOpen ? '영업중' : '마감'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
