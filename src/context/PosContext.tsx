@@ -23,7 +23,7 @@ import {
 } from '../data/initialData';
 import { playPosBeep, playSuccessChime, playCashRegisterSound, playPrintSound } from '../utils/audio';
 
-export type MainTab = 'DASHBOARD' | 'ORDERS' | 'HALL' | 'CHECKOUT' | 'MENUS';
+export type MainTab = 'DASHBOARD' | 'ORDERS' | 'HALL' | 'CHECKOUT' | 'MENUS' | 'CALL_SCREEN';
 
 interface PosContextType {
   activeTab: MainTab;
@@ -34,6 +34,7 @@ interface PosContextType {
   addMenuItem: (item: Omit<MenuItem, 'id' | 'createdAt'>) => void;
   updateMenuItem: (id: string, updates: Partial<MenuItem>) => void;
   deleteMenuItem: (id: string) => void;
+  resetMenuPricesToDefault: () => void;
   
   // Tables
   tables: TableItem[];
@@ -58,6 +59,8 @@ interface PosContextType {
   clearCart: () => void;
   updateCartItemQty: (itemId: string, qty: number) => void;
   updateCartItemDiscount: (itemId: string, discount: number) => void;
+  updateCartItemRemark: (itemId: string, remark: string) => void;
+  updateCartItemOptions: (itemId: string, selectedOptions: string[], addedPrice?: number) => void;
   cartTable: TableItem | null;
   setCartTable: (table: TableItem | null) => void;
   cartOrderType: '매장' | '포장';
@@ -125,11 +128,13 @@ interface PosContextType {
 const PosContext = createContext<PosContextType | undefined>(undefined);
 
 export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Guaranteed clean slate reset to empty all previous orders and table statuses
-  const CLEAN_SLATE_STAMP = 'kio_pos_v4_empty_slate';
+  // Guaranteed clean slate reset to empty all previous orders and restore original clean prices
+  const CLEAN_SLATE_STAMP = 'kio_pos_v6_no_auto_discount';
   if (typeof window !== 'undefined' && localStorage.getItem('kio_pos_stamp') !== CLEAN_SLATE_STAMP) {
     localStorage.removeItem('kio_pos_orders');
     localStorage.removeItem('kio_pos_reservations');
+    localStorage.removeItem('kio_pos_menus'); // Reset menus back to initial canonical original prices
+    localStorage.removeItem('kio_pos_daily_discount'); // Clear any stored auto discount
     localStorage.setItem('kio_pos_tables', JSON.stringify(INITIAL_TABLES));
     localStorage.setItem('kio_pos_stamp', CLEAN_SLATE_STAMP);
   }
@@ -242,6 +247,24 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem('kio_pos_orders', JSON.stringify(orders));
   }, [orders]);
+
+  // Listen for storage events from other windows (e.g. popup Call Screen <-> Main POS)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'kio_pos_orders' && e.newValue) {
+        try {
+          setOrders(JSON.parse(e.newValue));
+        } catch {}
+      }
+      if (e.key === 'kio_pos_tables' && e.newValue) {
+        try {
+          setTables(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('kio_pos_reservations', JSON.stringify(reservations));
@@ -361,18 +384,6 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addToCart = (menu: MenuItem, selectedOptions?: string[]) => {
     playBeep();
     
-    // Check if daily discount applies
-    let discountPerItem = 0;
-    if (dailyDiscount.isActive) {
-      if (dailyDiscount.targetCategory === '전체' || dailyDiscount.targetCategory === menu.category) {
-        if (dailyDiscount.discountType === 'PERCENT') {
-          discountPerItem = Math.round(menu.price * (dailyDiscount.discountValue / 100));
-        } else {
-          discountPerItem = dailyDiscount.discountValue;
-        }
-      }
-    }
-
     setCart(prev => {
       const optKey = (selectedOptions || []).sort().join(',');
       const existingIdx = prev.findIndex(item => item.menuId === menu.id && (item.selectedOptions || []).sort().join(',') === optKey);
@@ -389,14 +400,16 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         return updated;
       } else {
+        const itemDiscount = (menu.discountAmount && menu.discountAmount > 0) ? menu.discountAmount : 0;
         const newItem: OrderItem = {
           id: `ci_${Date.now()}_${Math.random()}`,
           menuId: menu.id,
           name: menu.name,
           unitPrice: menu.price,
           quantity: 1,
-          discount: discountPerItem,
-          totalPrice: Math.max(0, menu.price - discountPerItem),
+          discount: itemDiscount,
+          totalPrice: Math.max(0, menu.price - itemDiscount),
+          remark: menu.remark || (menu.remarks && menu.remarks[0]) || '',
           selectedOptions: selectedOptions || []
         };
         return [...prev, newItem];
@@ -444,6 +457,46 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return item;
     }));
+  };
+
+  const updateCartItemRemark = (itemId: string, remark: string) => {
+    playBeep();
+    setCart(prev => prev.map(item => {
+      if (item.id === itemId) {
+        // Toggle if same remark clicked
+        const newRemark = item.remark === remark ? '' : remark;
+        return {
+          ...item,
+          remark: newRemark,
+        };
+      }
+      return item;
+    }));
+  };
+
+  const updateCartItemOptions = (itemId: string, selectedOptions: string[], addedPrice: number = 0) => {
+    playBeep();
+    setCart(prev => prev.map(item => {
+      if (item.id === itemId) {
+        const baseMenu = menuItems.find(m => m.id === item.menuId);
+        const basePrice = baseMenu ? baseMenu.price : item.unitPrice;
+        const newUnitPrice = basePrice + addedPrice;
+        const total = (newUnitPrice * item.quantity) - (item.discount * item.quantity);
+        return {
+          ...item,
+          unitPrice: newUnitPrice,
+          selectedOptions,
+          totalPrice: Math.max(0, total)
+        };
+      }
+      return item;
+    }));
+  };
+
+  const resetMenuPricesToDefault = () => {
+    setMenuItems(INITIAL_MENU_ITEMS);
+    localStorage.setItem('kio_pos_menus', JSON.stringify(INITIAL_MENU_ITEMS));
+    showToast('모든 메뉴 가격이 원래 기본 가격으로 초기화되었습니다.');
   };
 
   const completePayment = (
@@ -645,6 +698,7 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addMenuItem,
         updateMenuItem,
         deleteMenuItem,
+        resetMenuPricesToDefault,
         tables,
         selectedTable,
         setSelectedTable,
@@ -663,6 +717,8 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearCart,
         updateCartItemQty,
         updateCartItemDiscount,
+        updateCartItemRemark,
+        updateCartItemOptions,
         cartTable,
         setCartTable,
         cartOrderType,

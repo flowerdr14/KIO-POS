@@ -6,6 +6,7 @@ import { OrderManagementView } from './components/OrderManagementView';
 import { HallManagementView } from './components/HallManagementView';
 import { PosCheckoutView } from './components/PosCheckoutView';
 import { MenuManagementView } from './components/MenuManagementView';
+import { CallScreenView } from './components/CallScreenView';
 
 // Modals
 import { AddMenuModal } from './components/AddMenuModal';
@@ -22,6 +23,40 @@ import { ShiftModal } from './components/ShiftModal';
 const PosMainApp: React.FC = () => {
   const { activeTab, toastMessage } = usePos();
 
+  const [isStandaloneCallScreen, setIsStandaloneCallScreen] = React.useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.location.search.includes('view=call-screen') ||
+      window.location.hash === '#call-screen'
+    );
+  });
+
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      setIsStandaloneCallScreen(
+        window.location.search.includes('view=call-screen') ||
+        window.location.hash === '#call-screen'
+      );
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Standalone Popup Window (Dual-display DID / Kitchen monitor)
+  if (isStandaloneCallScreen) {
+    return (
+      <div className="min-h-screen bg-black text-white">
+        <CallScreenView isStandalone={true} />
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-[#145388] text-white px-5 py-3 rounded shadow-2xl border-2 border-white flex items-center gap-3 animate-bounce">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+            <span className="font-bold text-sm tracking-wide">{toastMessage}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#c8dcf0]/40 text-slate-900 font-sans flex flex-col">
       {/* Top Main Navigation Header */}
@@ -34,6 +69,7 @@ const PosMainApp: React.FC = () => {
         {activeTab === 'HALL' && <HallManagementView />}
         {activeTab === 'CHECKOUT' && <PosCheckoutView />}
         {activeTab === 'MENUS' && <MenuManagementView />}
+        {activeTab === 'CALL_SCREEN' && <CallScreenView />}
       </main>
 
 

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { usePos } from '../context/PosContext';
+import { Tv } from 'lucide-react';
+import { openCallScreenPopup } from '../utils/popup';
 
 export const DashboardView: React.FC = () => {
   const {
@@ -23,6 +25,7 @@ export const DashboardView: React.FC = () => {
     setCartTable,
     clearAllOrders,
     clearAllTables,
+    showToast,
   } = usePos();
 
   const [tableFilter, setTableFilter] = useState<'OCCUPIED' | 'ALL'>('OCCUPIED');
@@ -303,6 +306,24 @@ export const DashboardView: React.FC = () => {
             className="bg-white hover:bg-blue-50 border-2 border-[#1f6ea9] text-[#1f6ea9] font-bold text-lg md:text-xl py-3.5 px-3 rounded-none shadow-sm transition-all active:scale-[0.98] flex items-center justify-center"
           >
             오늘의할인
+          </button>
+
+          {/* 호출화면 전광판 팝업 */}
+          <button
+            id="btn-dashboard-call-popup"
+            onClick={() => {
+              const ok = openCallScreenPopup();
+              if (ok) {
+                showToast('호출 전광판 팝업창이 열렸습니다. (듀얼 모니터에 배치하세요)');
+              } else {
+                showToast('팝업 차단이 감지되었습니다. 브라우저 팝업 허용을 확인해주세요.');
+              }
+            }}
+            className="col-span-2 bg-[#0e3b68] hover:bg-[#0a2c4e] text-white font-bold text-lg md:text-xl py-3 px-3 rounded-none shadow transition-all active:scale-[0.98] flex items-center justify-center gap-2 border border-blue-400/30"
+            title="실시간 주문/호출 전광판 새 창 팝업으로 열기"
+          >
+            <Tv size={22} className="text-blue-300" />
+            <span>실시간 호출 전광판 (팝업창) ↗</span>
           </button>
         </div>
 

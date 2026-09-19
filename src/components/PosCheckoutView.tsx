@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { usePos } from '../context/PosContext';
 import { MenuCategory, MenuItem } from '../types';
 import { playKeypadBeep } from '../utils/audio';
-import { CreditCard, Printer, Receipt, Banknote, Sparkles } from 'lucide-react';
+import { CreditCard, Printer, Receipt, Banknote, Sparkles, Sliders } from 'lucide-react';
 
 export const PosCheckoutView: React.FC = () => {
   const {
@@ -13,6 +13,8 @@ export const PosCheckoutView: React.FC = () => {
     clearCart,
     updateCartItemQty,
     updateCartItemDiscount,
+    updateCartItemRemark,
+    updateCartItemOptions,
     cartTable,
     setCartTable,
     cartOrderType,
@@ -33,6 +35,7 @@ export const PosCheckoutView: React.FC = () => {
 
   // Selected row in cart table for editing
   const [selectedCartItemId, setSelectedCartItemId] = useState<string | null>(null);
+  const selectedCartItem = cart.find((it) => it.id === selectedCartItemId);
 
   // Bottom-Left subtab
   const [bottomTab, setBottomTab] = useState<'결제정보' | '결제내역' | '회원정보'>('결제정보');
@@ -45,12 +48,18 @@ export const PosCheckoutView: React.FC = () => {
   const [memberPhone, setMemberPhone] = useState('');
   const [memberPoints, setMemberPoints] = useState(0);
 
-  // Quantity modal / discount modal
+  // Quantity modal / discount modal / option modal
   const [isQtyModalOpen, setIsQtyModalOpen] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [customDiscountVal, setCustomDiscountVal] = useState<number>(1000);
   const [isSplitPayModalOpen, setIsSplitPayModalOpen] = useState(false);
   const [splitCashAmount, setSplitCashAmount] = useState<number>(0);
+
+  // Option modal state
+  const [isOptionModalOpen, setIsOptionModalOpen] = useState(false);
+  const [tempSelectedOptions, setTempSelectedOptions] = useState<string[]>([]);
+  const [customOptionName, setCustomOptionName] = useState('');
+  const [customOptionPrice, setCustomOptionPrice] = useState(500);
 
   // Filter menu items by active category
   const filteredMenuItems = menuItems.filter(
@@ -117,6 +126,55 @@ export const PosCheckoutView: React.FC = () => {
       return;
     }
     setIsDiscountModalOpen(true);
+  };
+
+  const handleOpenOptionModal = () => {
+    let targetId = selectedCartItemId;
+    if (!targetId && cart.length === 1) {
+      targetId = cart[0].id;
+      setSelectedCartItemId(targetId);
+    }
+    if (!targetId) {
+      showToast('옵션을 추가할 항목을 장바구니에서 먼저 선택해주세요.');
+      return;
+    }
+    const item = cart.find((c) => c.id === targetId);
+    setTempSelectedOptions(item?.selectedOptions ? [...item.selectedOptions] : []);
+    setIsOptionModalOpen(true);
+  };
+
+  const handleToggleOption = (optName: string) => {
+    if (tempSelectedOptions.includes(optName)) {
+      setTempSelectedOptions(tempSelectedOptions.filter((o) => o !== optName));
+    } else {
+      setTempSelectedOptions([...tempSelectedOptions, optName]);
+    }
+  };
+
+  const handleSaveOptions = () => {
+    if (!selectedCartItemId) return;
+    const item = cart.find((c) => c.id === selectedCartItemId);
+    if (!item) return;
+
+    const baseMenu = menuItems.find((m) => m.id === item.menuId);
+    let addedPrice = 0;
+
+    tempSelectedOptions.forEach((optName) => {
+      const menuOpt = baseMenu?.options?.find((o) => o.name === optName);
+      if (menuOpt) {
+        addedPrice += menuOpt.price;
+      } else if (optName.includes('사이즈 업')) {
+        addedPrice += 1000;
+      } else if (optName.includes('텀블러 할인')) {
+        addedPrice -= 300;
+      } else if (optName.includes('추가') || optName.includes('변경')) {
+        addedPrice += 500;
+      }
+    });
+
+    updateCartItemOptions(selectedCartItemId, tempSelectedOptions, addedPrice);
+    setIsOptionModalOpen(false);
+    showToast(`'${item.name}'의 옵션이 저장되었습니다.`);
   };
 
   const handlePayment = (method: '주문' | '현금' | '신용카드' | '복합결제' | '단순현금' | '서비스') => {
@@ -188,20 +246,21 @@ export const PosCheckoutView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Top-Left: Order Cart Table (col-span-5) */}
         <div className="lg:col-span-5 flex flex-col border-2 border-[#2b71b8] bg-white shadow-sm h-[380px]">
-          {/* Table Header */}
+          {/* Table Header: No. | 메뉴명 | 단가 | 수량 | 할인 | 금액 | 비고 */}
           <div className="grid grid-cols-12 bg-[#2977ca] text-white text-center font-bold text-xs py-2 border-b border-[#2b71b8]">
             <div className="col-span-1 border-r border-blue-400">No.</div>
-            <div className="col-span-4 border-r border-blue-400">메뉴명</div>
+            <div className="col-span-3 border-r border-blue-400">메뉴명</div>
             <div className="col-span-2 border-r border-blue-400">단가</div>
             <div className="col-span-1 border-r border-blue-400">수량</div>
-            <div className="col-span-2 border-r border-blue-400">할인</div>
-            <div className="col-span-2">금액</div>
+            <div className="col-span-1 border-r border-blue-400">할인</div>
+            <div className="col-span-2 border-r border-blue-400">금액</div>
+            <div className="col-span-2">비고</div>
           </div>
 
           {/* Cart Table Rows */}
           <div className="flex-1 divide-y divide-slate-100 overflow-y-auto">
             {cart.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-sm font-medium">
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium px-4 text-center">
                 우측 메뉴판에서 메뉴를 터치하여 등록하세요.
               </div>
             ) : (
@@ -216,11 +275,11 @@ export const PosCheckoutView: React.FC = () => {
                     }`}
                   >
                     <div className="col-span-1 font-mono text-slate-500">{idx + 1}</div>
-                    <div className="col-span-4 text-left font-bold text-slate-800 truncate px-1">
+                    <div className="col-span-3 text-left font-bold text-slate-800 truncate px-1">
                       {item.name}
                       {item.selectedOptions && item.selectedOptions.length > 0 && (
-                        <span className="block text-[10px] text-slate-400 font-normal">
-                          {item.selectedOptions.join(', ')}
+                        <span className="block text-[10px] text-blue-600 font-normal truncate">
+                          +{item.selectedOptions.join(', ')}
                         </span>
                       )}
                     </div>
@@ -230,11 +289,20 @@ export const PosCheckoutView: React.FC = () => {
                     <div className="col-span-1 font-bold text-blue-700 font-mono">
                       {item.quantity}
                     </div>
-                    <div className="col-span-2 text-rose-600 font-mono">
+                    <div className="col-span-1 text-rose-600 font-mono">
                       {item.discount > 0 ? `-${(item.discount * item.quantity).toLocaleString()}` : '-'}
                     </div>
                     <div className="col-span-2 font-bold text-slate-900 font-mono">
                       {item.totalPrice.toLocaleString()}
+                    </div>
+                    <div className="col-span-2 px-0.5 flex items-center justify-center">
+                      {item.remark ? (
+                        <span className="bg-[#2977ca] text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-xs whitespace-nowrap truncate max-w-full">
+                          {item.remark}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
                     </div>
                   </div>
                 );
@@ -252,11 +320,11 @@ export const PosCheckoutView: React.FC = () => {
         </div>
 
         {/* Center Actions Column (col-span-1) */}
-        <div className="lg:col-span-1 flex flex-col justify-between gap-1.5">
+        <div className="lg:col-span-1 flex lg:flex-col justify-between gap-1.5">
           <button
             id="btn-pos-pay-primary"
             onClick={handleOpenPaymentModal}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs md:text-sm py-2 rounded-none shadow transition-all active:scale-95 flex flex-col items-center justify-center text-center leading-tight gap-1 border-2 border-emerald-400"
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2 rounded-none shadow transition-all active:scale-95 flex flex-col items-center justify-center text-center leading-tight gap-1 border-2 border-emerald-400"
           >
             <CreditCard size={15} />
             <span>결제하기</span>
@@ -264,21 +332,21 @@ export const PosCheckoutView: React.FC = () => {
           <button
             id="btn-pos-clear-all"
             onClick={clearCart}
-            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs md:text-sm py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
+            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
           >
             전체취소
           </button>
           <button
             id="btn-pos-clear-selected"
             onClick={handleRemoveSelected}
-            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs md:text-sm py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
+            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
           >
             선택취소
           </button>
           <button
             id="btn-pos-discount"
             onClick={handleApplyDiscount}
-            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs md:text-sm py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
+            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
           >
             할인처리
           </button>
@@ -291,9 +359,17 @@ export const PosCheckoutView: React.FC = () => {
               }
               setIsQtyModalOpen(true);
             }}
-            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs md:text-sm py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
+            className="flex-1 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-xs py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight"
           >
             수량변경
+          </button>
+          {/* 옵션추가 버튼 (수량변경 바로 밑) */}
+          <button
+            id="btn-pos-add-option"
+            onClick={handleOpenOptionModal}
+            className="flex-1 bg-[#1b5c9c] hover:bg-[#154677] text-white font-bold text-xs py-1.5 rounded-none shadow transition-all active:scale-95 flex items-center justify-center text-center leading-tight border border-blue-400"
+          >
+            옵션추가
           </button>
         </div>
 
@@ -316,19 +392,26 @@ export const PosCheckoutView: React.FC = () => {
             ))}
           </div>
 
-          {/* Menu Items Grid Tiles */}
+          {/* Menu Items Grid Tiles - 가로가 긴 직사각형 */}
           <div className="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 gap-2.5 overflow-y-auto bg-slate-50/50">
             {filteredMenuItems.map((menu) => (
               <button
                 key={menu.id}
                 onClick={() => addToCart(menu)}
-                className="h-24 bg-white border-2 border-[#2b71b8] p-2 flex flex-col justify-between text-left hover:bg-blue-50 transition-transform active:scale-95 shadow-sm group"
+                className="h-20 bg-white border-2 border-[#2b71b8] p-2.5 flex flex-col justify-between text-left hover:bg-blue-50 transition-transform active:scale-95 shadow-sm group"
               >
                 <div className="font-black text-slate-800 text-xs md:text-sm line-clamp-2 leading-tight group-hover:text-blue-700">
                   {menu.name}
                 </div>
-                <div className="text-right font-black font-mono text-[#1b5c9c] text-sm md:text-base">
-                  {menu.price.toLocaleString()}
+                <div className="flex items-center justify-between mt-1">
+                  <span className="font-mono text-xs md:text-sm font-black text-[#1b5c9c]">
+                    {menu.price.toLocaleString()}
+                  </span>
+                  {menu.remark && (
+                    <span className="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded font-bold">
+                      {menu.remark}
+                    </span>
+                  )}
                 </div>
               </button>
             ))}
@@ -708,6 +791,188 @@ export const PosCheckoutView: React.FC = () => {
                 className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-sm"
               >
                 결제 승인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Option Addition Modal (옵션추가 모달) */}
+      {isOptionModalOpen && selectedCartItem && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-5 border-2 border-[#2b71b8] flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              <div>
+                <h4 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
+                  <Sliders size={18} className="text-[#2b71b8]" />
+                  <span>[{selectedCartItem.name}] 옵션 추가</span>
+                </h4>
+                <p className="text-xs text-slate-500">메뉴관리에서 등록된 옵션 및 추가 옵션을 선택하세요.</p>
+              </div>
+              <button
+                onClick={() => setIsOptionModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {(() => {
+              const baseMenu = menuItems.find((m) => m.id === selectedCartItem.menuId);
+              const customMenuOptions = baseMenu?.options || [];
+
+              return (
+                <div className="flex flex-col gap-3 max-h-[420px] overflow-y-auto pr-1">
+                  {/* Menu-specific options registered in 메뉴관리 */}
+                  {customMenuOptions.length > 0 && (
+                    <div className="bg-blue-50/70 border border-blue-200 rounded p-2.5">
+                      <span className="text-xs font-bold text-blue-900 block mb-1.5 flex items-center gap-1">
+                        <Sparkles size={13} className="text-blue-600" />
+                        <span>메뉴관리에서 등록된 옵션 ({customMenuOptions.length}개)</span>
+                      </span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {customMenuOptions.map((opt) => {
+                          const isChecked = tempSelectedOptions.includes(opt.name);
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => handleToggleOption(opt.name)}
+                              className={`p-2 rounded border text-left text-xs flex items-center justify-between transition-all ${
+                                isChecked
+                                  ? 'bg-[#1b5c9c] text-white border-blue-800 font-bold shadow-sm'
+                                  : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                              }`}
+                            >
+                              <span className="truncate pr-1">{opt.name}</span>
+                              <span className="font-mono text-[11px] font-bold shrink-0">
+                                +{opt.price.toLocaleString()}원
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Standard store options */}
+                  <div>
+                    <span className="text-xs font-bold text-slate-700 block mb-1.5">
+                      매장 추천 기본 옵션
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { name: '샷 추가', price: 500 },
+                        { name: '시럽 추가', price: 500 },
+                        { name: '디카페인 변경', price: 500 },
+                        { name: '휘핑크림 추가', price: 500 },
+                        { name: '사이즈 업 (L)', price: 1000 },
+                        { name: '포장용기 추가', price: 500 },
+                        { name: '얼음 많이', price: 0 },
+                        { name: '얼음 적게', price: 0 },
+                      ].map((std) => {
+                        const isChecked = tempSelectedOptions.includes(std.name);
+                        return (
+                          <button
+                            key={std.name}
+                            type="button"
+                            onClick={() => handleToggleOption(std.name)}
+                            className={`p-2 rounded border text-left text-xs flex items-center justify-between transition-all ${
+                              isChecked
+                                ? 'bg-[#2977ca] text-white border-blue-700 font-bold shadow-sm'
+                                : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                            }`}
+                          >
+                            <span className="truncate pr-1">{std.name}</span>
+                            <span className="font-mono text-[11px] font-bold shrink-0">
+                              +{std.price.toLocaleString()}원
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Direct custom option entry */}
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded">
+                    <span className="text-xs font-bold text-slate-700 block mb-1">직접 옵션 입력</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="옵션명 (예: 펄 추가)"
+                        value={customOptionName}
+                        onChange={(e) => setCustomOptionName(e.target.value)}
+                        className="flex-1 border rounded px-2 py-1 text-xs bg-white focus:outline-none focus:border-blue-500"
+                      />
+                      <input
+                        type="number"
+                        placeholder="금액"
+                        value={customOptionPrice}
+                        onChange={(e) => setCustomOptionPrice(Number(e.target.value))}
+                        className="w-20 border rounded px-2 py-1 text-xs font-mono text-right bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!customOptionName.trim()) return;
+                          if (!tempSelectedOptions.includes(customOptionName.trim())) {
+                            setTempSelectedOptions([...tempSelectedOptions, customOptionName.trim()]);
+                          }
+                          setCustomOptionName('');
+                        }}
+                        className="bg-[#2977ca] hover:bg-[#1f63ab] text-white px-3 py-1 rounded text-xs font-bold"
+                      >
+                        추가
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Selected options tags display */}
+                  <div className="pt-2 border-t text-xs flex flex-col gap-1">
+                    <span className="text-slate-600 font-bold">
+                      선택된 옵션 ({tempSelectedOptions.length}개):
+                    </span>
+                    <div className="flex flex-wrap gap-1 min-h-[28px] p-1 bg-slate-50 rounded border border-slate-200">
+                      {tempSelectedOptions.length === 0 ? (
+                        <span className="text-[11px] text-slate-400 italic">선택된 옵션이 없습니다.</span>
+                      ) : (
+                        tempSelectedOptions.map((opt) => (
+                          <span
+                            key={opt}
+                            className="bg-blue-100 text-blue-800 text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-xs"
+                          >
+                            <span>{opt}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleOption(opt)}
+                              className="text-rose-500 font-bold hover:text-rose-700 ml-0.5"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Modal Actions */}
+            <div className="flex gap-2 pt-2 border-t mt-1">
+              <button
+                type="button"
+                onClick={() => setIsOptionModalOpen(false)}
+                className="flex-1 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded text-xs"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveOptions}
+                className="flex-1 py-2 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold rounded text-xs shadow"
+              >
+                옵션 적용하기
               </button>
             </div>
           </div>

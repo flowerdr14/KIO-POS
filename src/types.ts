@@ -12,6 +12,43 @@ export type MenuCategory =
   | '디저트' 
   | '기타';
 
+// 28 Remark Statuses from the POS system
+export const REMARK_STATUSES = [
+  // Column 1 (11)
+  '1+1 교차',
+  '할인상품',
+  '행사상품',
+  '1+1 교차 x',
+  '2+1 교차',
+  '2+1 교차 x',
+  '세트상품',
+  '특가상품',
+  '기간한정',
+  '신상품',
+  '시즌상품',
+  // Column 2 (11)
+  '쿠폰상품',
+  '제휴할인',
+  '회원할인',
+  '직원할인',
+  '생일할인',
+  '적립금 사용 가능',
+  '포장전용',
+  '매장전용',
+  '배달전용',
+  '예약주문',
+  '선주문',
+  // Column 3 (6)
+  '단체주문',
+  '옵션변경',
+  '서비스',
+  '증정품',
+  '사은품',
+  '품절',
+] as const;
+
+export type RemarkStatus = typeof REMARK_STATUSES[number];
+
 export interface MenuOption {
   id: string;
   name: string;
@@ -33,6 +70,9 @@ export interface MenuItem {
   imageUrl?: string;
   options?: MenuOption[];
   hasOptions?: boolean;
+  remark?: string;
+  remarks?: string[];
+  discountAmount?: number;
   createdAt: string;
 }
 
@@ -49,6 +89,7 @@ export interface OrderItem {
   discount: number;
   totalPrice: number;
   note?: string;
+  remark?: string;
   selectedOptions?: string[];
 }
 

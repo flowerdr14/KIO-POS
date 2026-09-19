@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { usePos } from '../context/PosContext';
 import { TableItem } from '../types';
-import { Utensils, Clock, Users, Coffee, Edit3, ArrowRight, RotateCcw } from 'lucide-react';
+import { Utensils, Clock, Users, Coffee, Edit3, ArrowRight, RotateCcw, Tv } from 'lucide-react';
+import { openCallScreenPopup } from '../utils/popup';
 
 export const HallManagementView: React.FC = () => {
   const {
@@ -116,15 +117,33 @@ export const HallManagementView: React.FC = () => {
             2 Floor
           </button>
         </div>
-        <button
-          id="btn-hall-clear-all-tables"
-          onClick={clearAllTables}
-          className="text-xs md:text-sm font-bold px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 rounded transition-colors shadow-sm flex items-center gap-1.5"
-          title="모든 테이블을 빈 테이블로 깨끗하게 비우기"
-        >
-          <RotateCcw size={15} />
-          <span>테이블 전체 비우기</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            id="btn-hall-call-popup"
+            onClick={() => {
+              const ok = openCallScreenPopup();
+              if (ok) {
+                showToast('호출 전광판 팝업창이 열렸습니다. (듀얼 모니터에 배치하세요)');
+              } else {
+                showToast('팝업 차단이 감지되었습니다. 브라우저 팝업 허용을 확인해주세요.');
+              }
+            }}
+            className="text-xs md:text-sm font-bold px-3 py-2 bg-[#1b5c9c] hover:bg-[#154676] text-white rounded transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+            title="테이블/주문 실시간 호출 전광판 팝업 열기"
+          >
+            <Tv size={15} />
+            <span>호출 팝업 ↗</span>
+          </button>
+          <button
+            id="btn-hall-clear-all-tables"
+            onClick={clearAllTables}
+            className="text-xs md:text-sm font-bold px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 rounded transition-colors shadow-sm flex items-center gap-1.5"
+            title="모든 테이블을 빈 테이블로 깨끗하게 비우기"
+          >
+            <RotateCcw size={15} />
+            <span>테이블 전체 비우기</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Floor Plan Canvas Box */}

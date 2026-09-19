@@ -1,9 +1,10 @@
 import React from 'react';
 import { usePos, MainTab } from '../context/PosContext';
-import { Volume2, VolumeX, Store, Clock } from 'lucide-react';
+import { Volume2, VolumeX, Store, Clock, Tv } from 'lucide-react';
+import { openCallScreenPopup } from '../utils/popup';
 
 export const Header: React.FC = () => {
-  const { activeTab, setActiveTab, shift, soundEnabled, setSoundEnabled } = usePos();
+  const { activeTab, setActiveTab, shift, soundEnabled, setSoundEnabled, showToast } = usePos();
 
   const navItems: { id: MainTab; label: string }[] = [
     { id: 'ORDERS', label: '주문관리' },
@@ -11,6 +12,15 @@ export const Header: React.FC = () => {
     { id: 'CHECKOUT', label: '주문계산' },
     { id: 'MENUS', label: '메뉴관리' },
   ];
+
+  const handleOpenCallPopup = () => {
+    const success = openCallScreenPopup();
+    if (success) {
+      showToast('호출 전광판 팝업창이 열렸습니다. (듀얼 모니터에 배치하세요)');
+    } else {
+      showToast('팝업 차단이 감지되었습니다. 브라우저 팝업 허용을 확인해주세요.');
+    }
+  };
 
   return (
     <header className="bg-[#8fb5de] border-b-2 border-[#6092c4] px-6 py-2.5 flex items-center justify-between shadow-sm select-none">
@@ -73,7 +83,18 @@ export const Header: React.FC = () => {
       </nav>
 
       {/* Right Branch & Status info */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 md:gap-4">
+        {/* Real Popup Trigger for Call Screen DID */}
+        <button
+          id="btn-open-call-screen-popup"
+          onClick={handleOpenCallPopup}
+          className="flex items-center gap-1.5 bg-[#1e40af] hover:bg-[#1c368c] text-white px-3 py-1.5 rounded text-xs md:text-sm font-bold shadow transition-all active:scale-95 border border-white/30"
+          title="호출 전광판 팝업창 열기 (새 창 / 듀얼 모니터용)"
+        >
+          <Tv size={16} />
+          <span>호출 팝업 ↗</span>
+        </button>
+
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
           className="p-1.5 text-[#1e3a8a] hover:bg-[#a0c5ea] rounded-full transition-colors"

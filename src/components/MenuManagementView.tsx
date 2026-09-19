@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { usePos } from '../context/PosContext';
-import { MenuItem, MenuCategory, MenuOption } from '../types';
-import { Search, Plus, Trash2, Edit, Camera, Info } from 'lucide-react';
+import { MenuItem, MenuCategory, MenuOption, REMARK_STATUSES } from '../types';
+import { INITIAL_MENU_ITEMS } from '../data/initialData';
+import { Search, Plus, Trash2, Edit, Camera, Info, RotateCcw } from 'lucide-react';
 
 export const MenuManagementView: React.FC = () => {
-  const { menuItems, addMenuItem, updateMenuItem, deleteMenuItem, showToast } = usePos();
+  const { menuItems, addMenuItem, updateMenuItem, deleteMenuItem, resetMenuPricesToDefault, showToast } = usePos();
 
   const [categoryFilter, setCategoryFilter] = useState<string>('전체');
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,6 +22,23 @@ export const MenuManagementView: React.FC = () => {
   const [formOptions, setFormOptions] = useState<MenuOption[]>(selectedItem?.options || []);
   const [formDescription, setFormDescription] = useState<string>(selectedItem?.description || '');
   const [formIsAvailable, setFormIsAvailable] = useState<boolean>(selectedItem?.isAvailable ?? true);
+  const [formRemark, setFormRemark] = useState<string>(selectedItem?.remark || '');
+  const [formRemarks, setFormRemarks] = useState<string[]>(
+    selectedItem?.remarks || (selectedItem?.remark ? [selectedItem.remark] : [])
+  );
+  const [formDiscountAmount, setFormDiscountAmount] = useState<number>(selectedItem?.discountAmount || 0);
+
+  const isDiscountRelatedRemark = (status: string) => {
+    if (!status) return false;
+    return (
+      status.includes('할인') ||
+      status.includes('특가') ||
+      status.includes('행사') ||
+      status.includes('쿠폰')
+    );
+  };
+
+  const hasDiscountRemark = formRemarks.some(isDiscountRelatedRemark);
 
   // When selection changes, update form fields
   const handleSelectItem = (item: MenuItem) => {
@@ -33,6 +51,9 @@ export const MenuManagementView: React.FC = () => {
     setFormOptions(item.options || []);
     setFormDescription(item.description || '');
     setFormIsAvailable(item.isAvailable ?? true);
+    setFormRemark(item.remark || (item.remarks && item.remarks[0]) || '');
+    setFormRemarks(item.remarks || (item.remark ? [item.remark] : []));
+    setFormDiscountAmount(item.discountAmount || 0);
   };
 
   const handleAddNewOption = () => {
@@ -71,6 +92,9 @@ export const MenuManagementView: React.FC = () => {
       options: formOptions,
       description: formDescription,
       isAvailable: formIsAvailable,
+      remark: formRemark || formRemarks[0] || '',
+      remarks: formRemarks,
+      discountAmount: hasDiscountRemark ? (Number(formDiscountAmount) || 0) : 0,
     });
   };
 
@@ -92,6 +116,9 @@ export const MenuManagementView: React.FC = () => {
       description: formDescription,
       hasOptions: formHasOptions,
       options: formOptions,
+      remark: formRemark || formRemarks[0] || '',
+      remarks: formRemarks,
+      discountAmount: hasDiscountRemark ? (Number(formDiscountAmount) || 0) : 0,
       memo: '신규 등록 메뉴',
       recipe: '',
     });
@@ -125,9 +152,19 @@ export const MenuManagementView: React.FC = () => {
         <div className="lg:col-span-8 flex flex-col gap-6">
           {/* Top Box: 메뉴 목록 */}
           <div className="border-2 border-[#2b71b8] bg-white shadow-sm flex flex-col">
-            {/* Header with Search */}
-            <div className="bg-[#4d94d8] px-4 py-2 flex items-center justify-between border-b-2 border-[#2b71b8]">
-              <h2 className="text-white text-xl font-bold">메뉴 목록</h2>
+            {/* Header with Search & Reset Price Button */}
+            <div className="bg-[#4d94d8] px-4 py-2 flex items-center justify-between border-b-2 border-[#2b71b8] flex-wrap gap-2">
+              <div className="flex items-center gap-3">
+                <h2 className="text-white text-xl font-bold">메뉴 목록</h2>
+                <button
+                  onClick={resetMenuPricesToDefault}
+                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-2.5 py-1 rounded shadow flex items-center gap-1 transition-all active:scale-95"
+                  title="모든 메뉴의 가격을 원래 기본 가격으로 초기화합니다."
+                >
+                  <RotateCcw size={13} />
+                  <span>원래 가격으로 초기화</span>
+                </button>
+              </div>
               <div className="flex items-center gap-1.5">
                 <input
                   type="text"
@@ -199,12 +236,22 @@ export const MenuManagementView: React.FC = () => {
                         />
                       </div>
                       <div className="col-span-1 font-mono text-slate-500">{idx + 1}</div>
-                      <div className="col-span-4 text-left font-bold text-slate-800 truncate px-2">
-                        {item.name}
+                      <div className="col-span-4 text-left font-bold text-slate-800 truncate px-2 flex items-center gap-1">
+                        <span className="truncate">{item.name}</span>
+                        {item.discountAmount && item.discountAmount > 0 ? (
+                          <span className="shrink-0 text-[9px] bg-rose-100 text-rose-700 px-1 py-0.5 rounded font-bold">
+                            할인
+                          </span>
+                        ) : null}
                       </div>
                       <div className="col-span-2 text-slate-600">{item.category}</div>
-                      <div className="col-span-2 font-mono font-bold text-slate-900">
-                        {item.price.toLocaleString()} 원
+                      <div className="col-span-2 font-mono font-bold text-slate-900 flex flex-col items-center justify-center leading-tight">
+                        <span>{item.price.toLocaleString()} 원</span>
+                        {item.discountAmount && item.discountAmount > 0 ? (
+                          <span className="text-[10px] text-rose-600 font-normal">
+                            (-{item.discountAmount.toLocaleString()}원)
+                          </span>
+                        ) : null}
                       </div>
                       <div className="col-span-1">
                         <span
@@ -292,12 +339,138 @@ export const MenuManagementView: React.FC = () => {
           </div>
 
           <div className="p-4 flex-1 flex flex-col gap-3 overflow-y-auto text-xs">
-            {/* Top row: Image Placeholder + Basic Inputs */}
+            {/* Top row: Image Placeholder + Remarks Dropdown + Basic Inputs */}
             <div className="grid grid-cols-12 gap-3">
-              {/* Image Box (col-span-5) */}
-              <div className="col-span-5 aspect-square bg-slate-100 border border-slate-300 rounded flex flex-col items-center justify-center text-slate-400 gap-1 hover:bg-slate-200 cursor-pointer transition-colors">
-                <Camera size={28} />
-                <span className="text-[11px] font-medium">이미지 없음</span>
+              {/* Image Box and Remarks under image (col-span-5) */}
+              <div className="col-span-5 flex flex-col gap-2">
+                <div className="aspect-square bg-slate-100 border border-slate-300 rounded flex flex-col items-center justify-center text-slate-400 gap-1 hover:bg-slate-200 cursor-pointer transition-colors shadow-inner">
+                  <Camera size={26} />
+                  <span className="text-[10px] font-medium">이미지 없음</span>
+                </div>
+
+                {/* 이미지 밑 비고 추가 영역 (28개 비고 상태 드롭다운) */}
+                <div className="bg-blue-50/50 border border-blue-200 rounded p-2 flex flex-col gap-1.5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                      <span>비고</span>
+                      <span className="text-[10px] text-blue-600 font-normal">(28개 상태)</span>
+                    </label>
+                    {formRemarks.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormRemarks([]);
+                          setFormRemark('');
+                        }}
+                        className="text-[10px] text-rose-500 hover:underline"
+                      >
+                        전체삭제
+                      </button>
+                    )}
+                  </div>
+
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      if (!formRemarks.includes(val)) {
+                        const updated = [...formRemarks, val];
+                        setFormRemarks(updated);
+                        setFormRemark(val);
+                        if (isDiscountRelatedRemark(val) && (!formDiscountAmount || formDiscountAmount === 0)) {
+                          setFormDiscountAmount(500);
+                        }
+                      } else {
+                        setFormRemark(val);
+                      }
+                    }}
+                    className="w-full border border-[#2b71b8] rounded px-1.5 py-1 text-xs bg-white text-slate-900 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                  >
+                    <option value="">+ 비고 상태 드롭다운 추가...</option>
+                    {REMARK_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Added remarks tags */}
+                  <div className="flex flex-wrap gap-1 mt-0.5 max-h-24 overflow-y-auto">
+                    {formRemarks.length === 0 ? (
+                      <span className="text-[10px] text-slate-400 italic">비고 상태를 드롭다운에서 선택하세요.</span>
+                    ) : (
+                      formRemarks.map((status) => (
+                        <span
+                          key={status}
+                          className="bg-[#2b82d9] text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm inline-flex items-center gap-1"
+                        >
+                          <span>{status}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = formRemarks.filter((r) => r !== status);
+                              setFormRemarks(updated);
+                              if (formRemark === status) {
+                                setFormRemark(updated[0] || '');
+                              }
+                            }}
+                            className="hover:text-rose-200 font-bold text-xs"
+                            title="삭제"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+
+                  {/* 할인 관련 비고 선택 시 노출되는 할인 금액 입력 칸 */}
+                  {hasDiscountRemark && (
+                    <div className="mt-1.5 p-2 bg-rose-50/90 border border-rose-300 rounded flex flex-col gap-1.5 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-rose-800 text-[11px] flex items-center gap-1">
+                          <span>할인 금액 입력</span>
+                          <span className="text-[10px] text-rose-500 font-normal">(직접입력)</span>
+                        </label>
+                        <span className="text-[10px] font-mono font-bold text-rose-700">
+                          할인적용가: {Math.max(0, (Number(formPrice) || 0) - (Number(formDiscountAmount) || 0)).toLocaleString()}원
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={formDiscountAmount || ''}
+                          onChange={(e) => setFormDiscountAmount(Math.max(0, Number(e.target.value)))}
+                          placeholder="할인 금액 입력"
+                          className="w-full border border-rose-300 rounded px-2 py-1 text-xs bg-white text-rose-900 font-black focus:outline-none focus:ring-1 focus:ring-rose-500 font-mono text-right"
+                          min={0}
+                          step={100}
+                        />
+                        <span className="text-xs font-bold text-rose-800 shrink-0">원</span>
+                      </div>
+
+                      {/* Quick discount buttons */}
+                      <div className="grid grid-cols-4 gap-1">
+                        {[500, 1000, 1500, 2000].map((quick) => (
+                          <button
+                            key={quick}
+                            type="button"
+                            onClick={() => setFormDiscountAmount(quick)}
+                            className={`py-0.5 text-[10px] font-mono font-bold rounded border transition-colors ${
+                              formDiscountAmount === quick
+                                ? 'bg-rose-600 text-white border-rose-700'
+                                : 'bg-white hover:bg-rose-100 text-rose-700 border-rose-200'
+                            }`}
+                          >
+                            -{quick}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Basic Inputs (col-span-7) */}
@@ -336,7 +509,24 @@ export const MenuManagementView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 block mb-0.5">가격</label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="font-bold text-slate-700">가격</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const canonical = INITIAL_MENU_ITEMS.find((m) => m.name === formName || m.id === selectedItem?.id);
+                        if (canonical) {
+                          setFormPrice(canonical.price);
+                          showToast(`원래 가격(${canonical.price.toLocaleString()}원)으로 복원되었습니다.`);
+                        } else {
+                          setFormPrice(4000);
+                        }
+                      }}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 font-bold hover:underline"
+                    >
+                      원래 가격으로 변경
+                    </button>
+                  </div>
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
@@ -346,6 +536,17 @@ export const MenuManagementView: React.FC = () => {
                     />
                     <span className="text-slate-600 font-bold">원</span>
                   </div>
+                  {hasDiscountRemark && (
+                    <div className="mt-1 p-1.5 bg-rose-50 border border-rose-200 rounded text-[11px] flex items-center justify-between text-rose-800 font-bold">
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
+                        할인적용: -{Number(formDiscountAmount || 0).toLocaleString()}원
+                      </span>
+                      <span className="font-mono text-xs text-rose-700">
+                        최종 {Math.max(0, (Number(formPrice) || 0) - (Number(formDiscountAmount) || 0)).toLocaleString()}원
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
