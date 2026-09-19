@@ -69,7 +69,6 @@ const PosMainApp: React.FC = () => {
         {activeTab === 'HALL' && <HallManagementView />}
         {activeTab === 'CHECKOUT' && <PosCheckoutView />}
         {activeTab === 'MENUS' && <MenuManagementView />}
-        {activeTab === 'CALL_SCREEN' && <CallScreenView />}
       </main>
 
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePos } from '../context/PosContext';
 import { Order, OrderStatus } from '../types';
-import { Search, Printer, Edit, MessageSquare, XCircle, CheckCircle, StickyNote } from 'lucide-react';
+import { Search, Printer, Edit, MessageSquare, XCircle, CheckCircle, StickyNote, Bell } from 'lucide-react';
 
 export const OrderManagementView: React.FC = () => {
   const {
@@ -66,6 +66,12 @@ export const OrderManagementView: React.FC = () => {
   const handleStatusChange = (newStatus: OrderStatus) => {
     if (selectedOrder) {
       updateOrderStatus(selectedOrder.id, newStatus);
+      // If a status filter is active and doesn't match the new status,
+      // reset filter to '전체' so the order doesn't unexpectedly disappear from the user's view
+      if (statusFilter !== '전체' && statusFilter !== newStatus) {
+        setStatusFilter('전체');
+      }
+      setSelectedId(selectedOrder.id);
     }
   };
 
@@ -185,9 +191,9 @@ export const OrderManagementView: React.FC = () => {
               <div className="col-span-2 border-r border-[#2b71b8]/40">
                 {subTab === '현황' ? '주문시간' : '예약시간'}
               </div>
-              <div className="col-span-3 border-r border-[#2b71b8]/40">메뉴</div>
-              <div className="col-span-2 border-r border-[#2b71b8]/40">금액</div>
-              <div className="col-span-1">결제</div>
+              <div className="col-span-2 border-r border-[#2b71b8]/40">메뉴</div>
+              <div className="col-span-2 border-r border-[#2b71b8]/40">금액/결제</div>
+              <div className="col-span-2">상태(호출)</div>
             </div>
 
             {/* List Table Body */}
@@ -220,17 +226,35 @@ export const OrderManagementView: React.FC = () => {
                       <div className="col-span-2 text-slate-600 font-medium">
                         {order.isReservation ? order.reservationTime : order.orderTime}
                       </div>
-                      <div className="col-span-3 text-left truncate px-1 font-medium text-slate-800">
+                      <div className="col-span-2 text-left truncate px-1 font-medium text-slate-800">
                         {itemTitle}
                       </div>
-                      <div className="col-span-2 font-mono text-slate-900 font-bold">
-                        ₩{order.totalAmount.toLocaleString()}
-                      </div>
-                      <div className="col-span-1">
-                        <span className={`text-[10px] px-1 py-0.5 rounded font-bold ${
+                      <div className="col-span-2 font-mono text-slate-900 font-bold flex flex-col items-center justify-center">
+                        <span>₩{order.totalAmount.toLocaleString()}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
                           order.paymentStatus === '결제완료' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                         }`}>
-                          {order.paymentStatus === '결제완료' ? '완료' : '미결'}
+                          {order.paymentStatus === '결제완료' ? '결제완료' : '미결제'}
+                        </span>
+                      </div>
+                      <div className="col-span-2 flex justify-center">
+                        <span
+                          className={`inline-flex items-center gap-1 text-[11px] md:text-xs px-2.5 py-1 rounded-full font-bold shadow-sm transition-all ${
+                            order.status === '준비완료'
+                              ? 'bg-emerald-600 text-white animate-pulse'
+                              : order.status === '준비중'
+                              ? 'bg-amber-500 text-white'
+                              : order.status === '접수'
+                              ? 'bg-blue-500 text-white'
+                              : order.status === '제공완료'
+                              ? 'bg-[#eb86bc] text-white'
+                              : order.status === '취소됨'
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-slate-500 text-white'
+                          }`}
+                        >
+                          {order.status === '준비완료' && <Bell size={11} className="animate-bounce" />}
+                          <span>{order.status}</span>
                         </span>
                       </div>
                     </div>
@@ -427,22 +451,37 @@ export const OrderManagementView: React.FC = () => {
                 </div>
 
                 {/* Status Progress Changer */}
-                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-600">진행상태 변경:</span>
-                  <div className="flex gap-2">
-                    {(['접수', '준비중', '준비완료', '제공완료'] as OrderStatus[]).map((st) => (
-                      <button
-                        key={st}
-                        onClick={() => handleStatusChange(st)}
-                        className={`px-3 py-1 text-xs font-bold rounded transition-all ${
-                          selectedOrder.status === st
-                            ? 'bg-[#1b5c9c] text-white shadow'
-                            : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        {st}
-                      </button>
-                    ))}
+                <div className="bg-slate-50 p-3 rounded border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs md:text-sm font-bold text-slate-800">진행상태 변경:</span>
+                    <span className="text-[11px] text-blue-600 font-medium">(호출 전광판 자동 반영)</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(['접수', '준비중', '준비완료', '제공완료'] as OrderStatus[]).map((st) => {
+                      const isCurrent = selectedOrder.status === st;
+                      let btnStyle = 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100';
+                      if (isCurrent) {
+                        if (st === '접수') btnStyle = 'bg-blue-600 text-white shadow ring-2 ring-blue-400 font-bold';
+                        else if (st === '준비중') btnStyle = 'bg-amber-500 text-white shadow ring-2 ring-amber-400 font-bold';
+                        else if (st === '준비완료') btnStyle = 'bg-emerald-600 text-white shadow ring-2 ring-emerald-400 font-black';
+                        else btnStyle = 'bg-slate-700 text-white shadow ring-2 ring-slate-400 font-bold';
+                      } else {
+                        if (st === '준비완료') btnStyle = 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-400 text-emerald-800 font-bold';
+                        else if (st === '준비중') btnStyle = 'bg-amber-50 hover:bg-amber-100 border border-amber-400 text-amber-800 font-bold';
+                      }
+                      return (
+                        <button
+                          key={st}
+                          onClick={() => handleStatusChange(st)}
+                          className={`px-3.5 py-1.5 text-xs md:text-sm rounded transition-all flex items-center gap-1 active:scale-95 ${btnStyle}`}
+                          title={st === '준비완료' ? '호출 전광판에 즉시 준비완료로 반영 및 딩동 알림' : `${st} 상태로 변경`}
+                        >
+                          {st === '준비완료' && <Bell size={13} className={isCurrent ? 'animate-bounce' : ''} />}
+                          <span>{st}</span>
+                          {st === '준비완료' && <span className="text-[10px] opacity-90">(호출)</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

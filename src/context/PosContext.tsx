@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   MenuItem,
   TableItem,
@@ -22,8 +22,10 @@ import {
   DEFAULT_DAILY_DISCOUNT
 } from '../data/initialData';
 import { playPosBeep, playSuccessChime, playCashRegisterSound, playPrintSound } from '../utils/audio';
+import { broadcastSyncMessage, getSyncChannel } from '../utils/syncBus';
+import { getPopupWindowRef, setPopupWindowRef } from '../utils/popup';
 
-export type MainTab = 'DASHBOARD' | 'ORDERS' | 'HALL' | 'CHECKOUT' | 'MENUS' | 'CALL_SCREEN';
+export type MainTab = 'DASHBOARD' | 'ORDERS' | 'HALL' | 'CHECKOUT' | 'MENUS';
 
 interface PosContextType {
   activeTab: MainTab;
@@ -161,7 +163,15 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('kio_pos_orders');
     if (!saved) return [];
     try {
-      return JSON.parse(saved);
+      const parsed: Order[] = JSON.parse(saved);
+      // Clean up corrupt entries without items, but never delete valid orders
+      const cleaned = parsed.filter(
+        (o) => o && o.id && Array.isArray(o.items) && o.items.length > 0
+      );
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem('kio_pos_orders', JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch {
       return [];
     }
@@ -248,13 +258,25 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('kio_pos_orders', JSON.stringify(orders));
   }, [orders]);
 
-  // Listen for storage events from other windows (e.g. popup Call Screen <-> Main POS)
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
+  // Listen for storage, BroadcastChannel, and direct window.postMessage between Main POS and Popup
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'kio_pos_orders' && e.newValue) {
-        try {
-          setOrders(JSON.parse(e.newValue));
-        } catch {}
+      if (e.key === 'kio_pos_orders') {
+        if (e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (Array.isArray(parsed)) {
+              setOrders(parsed.filter((o: Order) => o && o.id));
+            }
+          } catch {}
+        } else {
+          setOrders([]);
+        }
       }
       if (e.key === 'kio_pos_tables' && e.newValue) {
         try {
@@ -263,7 +285,113 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    const bus = getSyncChannel();
+    const handleSyncMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data) return;
+      if (data.type === 'SYNC_ORDERS' || data.type === 'ORDER_ADDED' || data.type === 'CLEAR_ORDERS') {
+        if (Array.isArray(data.orders)) {
+          setOrders(data.orders);
+        }
+      } else if (data.type === 'ORDER_STATUS_CHANGED') {
+        if (Array.isArray(data.orders)) {
+          setOrders(data.orders);
+        } else {
+          setOrders((prev) =>
+            prev.map((o) => (o.id === data.orderId ? { ...o, status: data.status } : o))
+          );
+        }
+      }
+    };
+    bus?.addEventListener('message', handleSyncMessage);
+
+    // Direct Window postMessage for cross-partition popup <-> opener sync
+    const handleWindowPostMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+
+      // Popup connected or requesting current state
+      if (data.type === 'POPUP_READY' || data.type === 'REQUEST_ORDERS') {
+        if (event.source && typeof (event.source as Window).postMessage === 'function') {
+          setPopupWindowRef(event.source as Window);
+          try {
+            (event.source as Window).postMessage({
+              type: 'SYNC_ORDERS',
+              orders: ordersRef.current,
+            }, '*');
+          } catch {}
+        }
+      }
+
+      // Orders payload received
+      if (data.type === 'SYNC_ORDERS' || data.type === 'ORDER_ADDED' || data.type === 'CLEAR_ORDERS') {
+        if (Array.isArray(data.orders)) {
+          setOrders(data.orders);
+        }
+      } else if (data.type === 'ORDER_STATUS_CHANGED') {
+        if (Array.isArray(data.orders)) {
+          setOrders(data.orders);
+        } else if (data.orderId) {
+          setOrders((prev) =>
+            prev.map((o) => (o.id === data.orderId ? { ...o, status: data.status } : o))
+          );
+        }
+      }
+    };
+    window.addEventListener('message', handleWindowPostMessage);
+
+    // If this window is the standalone popup, notify opener immediately
+    if (typeof window !== 'undefined' && window.opener && !window.opener.closed) {
+      try {
+        window.opener.postMessage({ type: 'POPUP_READY' }, '*');
+      } catch {}
+    }
+
+    // 300ms High-frequency sync across active windows
+    const interval = setInterval(() => {
+      // If we are opener and have an active popup, push latest orders directly
+      const popup = getPopupWindowRef();
+      if (popup && !popup.closed) {
+        try {
+          popup.postMessage({
+            type: 'SYNC_ORDERS',
+            orders: ordersRef.current,
+          }, '*');
+        } catch {}
+      }
+
+      // If we are the popup, periodically request fresh orders from opener
+      if (typeof window !== 'undefined' && window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'REQUEST_ORDERS' }, '*');
+        } catch {}
+      }
+
+      // Also check localStorage
+      try {
+        const raw = localStorage.getItem('kio_pos_orders');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            setOrders((prev) => {
+              if (prev.length !== parsed.length) return parsed;
+              const isDifferent = prev.some(
+                (p, idx) => p.id !== parsed[idx]?.id || p.status !== parsed[idx]?.status
+              );
+              return isDifferent ? parsed : prev;
+            });
+          }
+        }
+      } catch {}
+    }, 300);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      bus?.removeEventListener('message', handleSyncMessage);
+      window.removeEventListener('message', handleWindowPostMessage);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -355,14 +483,61 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Order methods
   const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-    setReservations(prev => prev.map(r => r.id === orderId ? { ...r, status } : r));
-    playBeep();
-    showToast(`주문 상태가 [${status}]로 변경되었습니다.`);
+    const existing = orders.find(o => o.id === orderId) || reservations.find(r => r.id === orderId);
+    const tableName = existing?.tableName || '';
+    const orderNumber = existing?.orderNumber || '';
+
+    let updatedOrders: Order[] = [];
+    setOrders(prev => {
+      const updated = prev.map(o => (o.id === orderId ? { ...o, status } : o));
+      updatedOrders = updated;
+      try {
+        localStorage.setItem('kio_pos_orders', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setReservations(prev => {
+      const updated = prev.map(r => (r.id === orderId ? { ...r, status } : r));
+      try {
+        localStorage.setItem('kio_pos_reservations', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    if (status === '준비완료') {
+      playSuccessChime();
+      showToast('🔔 [준비완료] 호출 전광판에 실시간 자동 반영되었습니다.');
+    } else {
+      playBeep();
+      showToast(`주문 상태가 [${status}]로 변경되었습니다.`);
+    }
+
+    // Broadcast to other windows/popups immediately with complete updated payload
+    broadcastSyncMessage({
+      type: 'ORDER_STATUS_CHANGED',
+      orderId,
+      status,
+      tableName,
+      orderNumber,
+      orders: updatedOrders
+    });
   };
 
   const cancelOrder = (orderId: string) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: '취소됨' } : o));
+    setOrders(prev => {
+      const updated = prev.map(o => o.id === orderId ? { ...o, status: '취소됨' as OrderStatus } : o);
+      try {
+        localStorage.setItem('kio_pos_orders', JSON.stringify(updated));
+      } catch {}
+      broadcastSyncMessage({
+        type: 'ORDER_STATUS_CHANGED',
+        orderId,
+        status: '취소됨',
+        orders: updated
+      });
+      return updated;
+    });
     playBeep();
     showToast('주문이 취소되었습니다.');
   };
@@ -536,7 +711,18 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       memo: `${method} 결제`
     };
 
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders(prev => {
+      const updated = [newOrder, ...prev];
+      try {
+        localStorage.setItem('kio_pos_orders', JSON.stringify(updated));
+      } catch {}
+      broadcastSyncMessage({
+        type: 'ORDER_ADDED',
+        order: newOrder,
+        orders: updated,
+      });
+      return updated;
+    });
 
     // Update table state if table was assigned
     if (cartTable) {
@@ -673,6 +859,10 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders([]);
     localStorage.removeItem('kio_pos_orders');
     setSelectedOrder(null);
+    broadcastSyncMessage({
+      type: 'CLEAR_ORDERS',
+      orders: [],
+    });
     showToast('최근 주문 내역이 완전히 비워졌습니다.');
   };
 

@@ -2,6 +2,20 @@
  * Utility to open the Call Screen (DID) in a real browser popup window
  * Designed for dual-screen POS setups (main POS + customer/kitchen DID monitor).
  */
+
+let activePopupWindow: Window | null = null;
+
+export const getPopupWindowRef = (): Window | null => {
+  if (activePopupWindow && !activePopupWindow.closed) {
+    return activePopupWindow;
+  }
+  return null;
+};
+
+export const setPopupWindowRef = (w: Window | null) => {
+  activePopupWindow = w;
+};
+
 export const openCallScreenPopup = (): boolean => {
   if (typeof window === 'undefined') return false;
 
@@ -19,17 +33,24 @@ export const openCallScreenPopup = (): boolean => {
     );
 
     if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-      // If blocked by browser popup blocker or iframe sandbox, fallback to _blank
+      // If blocked by browser popup blocker, fallback to _blank
       const fallback = window.open(url, '_blank');
+      if (fallback) {
+        activePopupWindow = fallback;
+      }
       return !!fallback;
     }
 
+    activePopupWindow = popup;
     popup.focus();
     return true;
   } catch (err) {
     console.warn('Failed to open popup, trying new tab fallback:', err);
     try {
-      window.open(url, '_blank');
+      const fallback = window.open(url, '_blank');
+      if (fallback) {
+        activePopupWindow = fallback;
+      }
       return true;
     } catch {
       return false;
