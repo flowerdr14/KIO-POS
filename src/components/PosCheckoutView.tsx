@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { usePos } from '../context/PosContext';
 import { MenuCategory, MenuItem } from '../types';
-import { playKeypadBeep } from '../utils/audio';
-import { CreditCard, Printer, Receipt, Banknote, Sparkles, Sliders } from 'lucide-react';
+import { playKeypadBeep, playPosBeep } from '../utils/audio';
+import { CreditCard, Printer, Receipt, Banknote, Sparkles, Sliders, Check } from 'lucide-react';
 
 export const PosCheckoutView: React.FC = () => {
   const {
@@ -19,6 +19,9 @@ export const PosCheckoutView: React.FC = () => {
     setCartTable,
     cartOrderType,
     setCartOrderType,
+    takeoutPackaging,
+    setTakeoutPackaging,
+    takeoutPackagingFee,
     completePayment,
     isPaymentModalOpen,
     setIsPaymentModalOpen,
@@ -30,7 +33,7 @@ export const PosCheckoutView: React.FC = () => {
   } = usePos();
 
   // Category filter
-  const categories: MenuCategory[] = ['DRINK', 'DOUGNUT', 'TEA', 'FRIED', 'DESERT'];
+  const categories: MenuCategory[] = ['DRINK', 'DOUGNUT', 'TEA', 'ICE CREAM', 'DESERT'];
   const [activeCategory, setActiveCategory] = useState<MenuCategory>('DRINK');
 
   // Selected row in cart table for editing
@@ -55,7 +58,11 @@ export const PosCheckoutView: React.FC = () => {
   const [isSplitPayModalOpen, setIsSplitPayModalOpen] = useState(false);
   const [splitCashAmount, setSplitCashAmount] = useState<number>(0);
 
-  // Option modal state
+  // Direct Menu Item Click Option Modal (e.g. 아이스크림 컵/콘 누를 때 옵션 선택)
+  const [pendingOptionMenu, setPendingOptionMenu] = useState<MenuItem | null>(null);
+  const [itemOptionSelections, setItemOptionSelections] = useState<string[]>([]);
+
+  // Option modal state (for editing existing cart item)
   const [isOptionModalOpen, setIsOptionModalOpen] = useState(false);
   const [tempSelectedOptions, setTempSelectedOptions] = useState<string[]>([]);
   const [customOptionName, setCustomOptionName] = useState('');
@@ -69,7 +76,8 @@ export const PosCheckoutView: React.FC = () => {
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const totalDiscount = cart.reduce((sum, item) => sum + item.discount * item.quantity, 0);
-  const amountDue = Math.max(0, subtotal - totalDiscount);
+  const packagingFee = cartOrderType === '포장' && takeoutPackaging === '캐리어' ? 1000 : 0;
+  const amountDue = Math.max(0, subtotal - totalDiscount + packagingFee);
   const changeRemaining = receivedCash > 0 ? Math.max(0, receivedCash - amountDue) : 0;
 
   const handleKeypadPress = (val: string) => {
@@ -151,6 +159,59 @@ export const PosCheckoutView: React.FC = () => {
     }
   };
 
+  // Direct Menu Item Click Handler (opens option modal if item has options)
+  const handleMenuItemClick = (menu: MenuItem) => {
+    if (menu.hasOptions && menu.options && menu.options.length > 0) {
+      setPendingOptionMenu(menu);
+      setItemOptionSelections([]);
+    } else {
+      addToCart(menu);
+    }
+  };
+
+  const handleToggleItemOption = (optName: string) => {
+    if (itemOptionSelections.includes(optName)) {
+      setItemOptionSelections(itemOptionSelections.filter((o) => o !== optName));
+    } else {
+      setItemOptionSelections([...itemOptionSelections, optName]);
+    }
+  };
+
+  const calculateItemOptionAddedPrice = (menu: MenuItem | null, selected: string[]) => {
+    if (!menu) return 0;
+    let sum = 0;
+    selected.forEach((optName) => {
+      const opt = menu.options?.find((o) => o.name === optName);
+      if (opt !== undefined) {
+        sum += opt.price;
+      } else if (optName === '딸기맛 추가') {
+        sum += 0;
+      } else if (optName === '초코맛 추가') {
+        sum += 500;
+      } else if (optName === '초코웨이퍼 추가' || optName === '체리 토핑 추가') {
+        sum += 700;
+      } else if (optName.includes('사이즈 업')) {
+        sum += 1000;
+      } else if (optName.includes('추가') || optName.includes('변경')) {
+        sum += 500;
+      }
+    });
+    return sum;
+  };
+
+  const handleConfirmItemOptions = (withOptions: boolean) => {
+    if (!pendingOptionMenu) return;
+    const opts = withOptions ? itemOptionSelections : [];
+    addToCart(pendingOptionMenu, opts);
+    if (opts.length > 0) {
+      showToast(`'${pendingOptionMenu.name}' (${opts.join(', ')}) 장바구니에 담겼습니다.`);
+    } else {
+      showToast(`'${pendingOptionMenu.name}' 장바구니에 담겼습니다.`);
+    }
+    setPendingOptionMenu(null);
+    setItemOptionSelections([]);
+  };
+
   const handleSaveOptions = () => {
     if (!selectedCartItemId) return;
     const item = cart.find((c) => c.id === selectedCartItemId);
@@ -161,8 +222,14 @@ export const PosCheckoutView: React.FC = () => {
 
     tempSelectedOptions.forEach((optName) => {
       const menuOpt = baseMenu?.options?.find((o) => o.name === optName);
-      if (menuOpt) {
+      if (menuOpt !== undefined) {
         addedPrice += menuOpt.price;
+      } else if (optName === '딸기맛 추가') {
+        addedPrice += 0;
+      } else if (optName === '초코맛 추가') {
+        addedPrice += 500;
+      } else if (optName === '초코웨이퍼 추가' || optName === '체리 토핑 추가') {
+        addedPrice += 700;
       } else if (optName.includes('사이즈 업')) {
         addedPrice += 1000;
       } else if (optName.includes('텀블러 할인')) {
@@ -239,6 +306,42 @@ export const PosCheckoutView: React.FC = () => {
           >
             포장테이크아웃
           </button>
+
+          {cartOrderType === '포장' && (
+            <div className="flex items-center gap-1.5 bg-black/20 backdrop-blur-xs px-2 py-0.5 rounded border border-white/30 text-xs">
+              <span className="font-bold text-white text-[11px]">포장재:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (soundEnabled) playPosBeep();
+                  setTakeoutPackaging('일회용비닐');
+                  showToast('포장 부자재: 일회용비닐 (+0원) 선택');
+                }}
+                className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${
+                  takeoutPackaging === '일회용비닐'
+                    ? 'bg-white text-[#1b5c9c] shadow-xs'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                일회용비닐 (+0원)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (soundEnabled) playPosBeep();
+                  setTakeoutPackaging('캐리어');
+                  showToast('포장 부자재: 캐리어 (+1,000원) 선택');
+                }}
+                className={`px-2 py-0.5 rounded text-xs font-bold transition-all ${
+                  takeoutPackaging === '캐리어'
+                    ? 'bg-amber-300 text-amber-950 shadow-xs'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                캐리어 (+1000원)
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -397,8 +500,8 @@ export const PosCheckoutView: React.FC = () => {
             {filteredMenuItems.map((menu) => (
               <button
                 key={menu.id}
-                onClick={() => addToCart(menu)}
-                className="h-20 bg-white border-2 border-[#2b71b8] p-2.5 flex flex-col justify-between text-left hover:bg-blue-50 transition-transform active:scale-95 shadow-sm group"
+                onClick={() => handleMenuItemClick(menu)}
+                className="h-20 bg-white border-2 border-[#2b71b8] p-2.5 flex flex-col justify-between text-left hover:bg-blue-50 transition-transform active:scale-95 shadow-sm group relative"
               >
                 <div className="font-black text-slate-800 text-xs md:text-sm line-clamp-2 leading-tight group-hover:text-blue-700">
                   {menu.name}
@@ -407,11 +510,18 @@ export const PosCheckoutView: React.FC = () => {
                   <span className="font-mono text-xs md:text-sm font-black text-[#1b5c9c]">
                     {menu.price.toLocaleString()}
                   </span>
-                  {menu.remark && (
-                    <span className="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded font-bold">
-                      {menu.remark}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {menu.hasOptions && (
+                      <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1 py-0.5 rounded font-bold">
+                        옵션
+                      </span>
+                    )}
+                    {menu.remark && (
+                      <span className="text-[9px] bg-blue-100 text-blue-800 px-1 py-0.5 rounded font-bold">
+                        {menu.remark}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
             ))}
@@ -455,6 +565,16 @@ export const PosCheckoutView: React.FC = () => {
                   {totalDiscount > 0 ? `-${totalDiscount.toLocaleString()}` : '0'} 원
                 </span>
               </div>
+              {cartOrderType === '포장' && (
+                <div className="flex justify-between items-center border-b border-amber-200 pb-1 bg-amber-50/60 px-1 rounded">
+                  <span className="font-bold text-amber-900 text-xs">
+                    포장 부자재 ({takeoutPackaging})
+                  </span>
+                  <span className="font-black font-mono text-sm text-amber-900">
+                    +{packagingFee.toLocaleString()} 원
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center border-b border-blue-200 pb-1">
                 <span className="font-black text-blue-900">받을 금액</span>
                 <span className="font-black font-mono text-lg text-blue-900">
@@ -791,6 +911,153 @@ export const PosCheckoutView: React.FC = () => {
                 className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-sm"
               >
                 결제 승인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Menu Item Option Selection Modal (아이스크림 등 메뉴 터치 시 옵션 선택창) */}
+      {pendingOptionMenu && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 select-none">
+          <div className="bg-white rounded-none shadow-2xl max-w-md w-full border-2 border-[#2b71b8] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="bg-[#1b5c9c] text-white px-4 py-2.5 flex items-center justify-between border-b-2 border-[#2b71b8]">
+              <div>
+                <h4 className="text-base font-bold flex items-center gap-1.5">
+                  <Sparkles size={16} className="text-yellow-300" />
+                  <span>[{pendingOptionMenu.name}] 옵션 선택</span>
+                </h4>
+                <p className="text-[11px] text-blue-100">원하시는 맛 및 토핑 옵션을 선택하세요.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setPendingOptionMenu(null);
+                  setItemOptionSelections([]);
+                }}
+                className="text-white/80 hover:text-white hover:bg-white/20 rounded px-2 py-0.5 font-bold text-sm transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 flex flex-col gap-3.5 bg-slate-50/50">
+              {/* Base Item Info */}
+              <div className="flex items-center justify-between p-2.5 bg-white border border-blue-200 rounded">
+                <span className="font-bold text-slate-800 text-sm">{pendingOptionMenu.name}</span>
+                <span className="font-mono font-black text-sm text-[#1b5c9c]">
+                  기본가: {pendingOptionMenu.price.toLocaleString()}원
+                </span>
+              </div>
+
+              {/* Options List */}
+              <div>
+                <span className="text-xs font-bold text-slate-700 block mb-2 flex items-center justify-between">
+                  <span>추가 가능한 옵션 ({pendingOptionMenu.options?.length || 0}개)</span>
+                  <span className="text-[11px] font-normal text-slate-500">다중 선택 가능</span>
+                </span>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {pendingOptionMenu.options?.map((opt) => {
+                    const isSelected = itemOptionSelections.includes(opt.name);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => handleToggleItemOption(opt.name)}
+                        className={`p-3 rounded border text-left transition-all flex flex-col justify-between gap-1.5 relative ${
+                          isSelected
+                            ? 'bg-[#1b5c9c] text-white border-blue-900 shadow-sm ring-2 ring-blue-400/50'
+                            : 'bg-white hover:bg-blue-50/50 text-slate-800 border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="font-bold text-xs leading-tight">{opt.name}</span>
+                          <span
+                            className={`w-4 h-4 rounded flex items-center justify-center text-[10px] shrink-0 ${
+                              isSelected ? 'bg-white text-blue-900 font-black' : 'border border-slate-300'
+                            }`}
+                          >
+                            {isSelected && <Check size={12} strokeWidth={3} />}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <span
+                            className={`text-[11px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                              isSelected ? 'bg-white/20 text-yellow-200' : 'bg-slate-100 text-[#1b5c9c]'
+                            }`}
+                          >
+                            +{opt.price.toLocaleString()}원
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selected Options Summary & Total Price Calculation */}
+              {(() => {
+                const added = calculateItemOptionAddedPrice(pendingOptionMenu, itemOptionSelections);
+                const finalTotal = pendingOptionMenu.price + added;
+
+                return (
+                  <div className="p-3 bg-blue-50 border-2 border-blue-200 rounded flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>기본 가격:</span>
+                      <span className="font-mono font-bold">{pendingOptionMenu.price.toLocaleString()}원</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-blue-700">
+                      <span>선택 옵션 ({itemOptionSelections.length}개):</span>
+                      <span className="font-mono font-bold">+{added.toLocaleString()}원</span>
+                    </div>
+                    {itemOptionSelections.length > 0 && (
+                      <div className="text-[11px] text-blue-800 bg-white p-1.5 rounded border border-blue-200">
+                        {itemOptionSelections.join(', ')}
+                      </div>
+                    )}
+                    <div className="border-t border-blue-200 pt-1.5 flex justify-between items-center">
+                      <span className="font-black text-xs text-slate-800">최종 금액:</span>
+                      <span className="font-black font-mono text-base text-[#1b5c9c]">
+                        ₩ {finalTotal.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-3 bg-white border-t border-slate-200 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingOptionMenu(null);
+                  setItemOptionSelections([]);
+                }}
+                className="py-2.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded text-xs transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmItemOptions(false)}
+                className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded text-xs border border-slate-300 transition-colors"
+              >
+                기본으로 담기
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmItemOptions(true)}
+                className="flex-1 py-2.5 bg-[#2977ca] hover:bg-[#1f63ab] text-white font-black rounded text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>장바구니 담기</span>
+                {itemOptionSelections.length > 0 && (
+                  <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">
+                    +{calculateItemOptionAddedPrice(pendingOptionMenu, itemOptionSelections).toLocaleString()}원
+                  </span>
+                )}
               </button>
             </div>
           </div>

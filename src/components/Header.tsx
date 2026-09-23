@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePos, MainTab } from '../context/PosContext';
-import { Volume2, VolumeX, Store, Clock, Tv } from 'lucide-react';
-import { openCallScreenPopup } from '../utils/popup';
+import { Volume2, VolumeX, Store, Clock, Tv, Monitor } from 'lucide-react';
+import { openCallScreenPopup, openKioskPopup } from '../utils/popup';
 
 export const Header: React.FC = () => {
   const { activeTab, setActiveTab, shift, soundEnabled, setSoundEnabled, showToast } = usePos();
@@ -17,6 +17,15 @@ export const Header: React.FC = () => {
     const success = openCallScreenPopup();
     if (success) {
       showToast('호출 전광판 팝업창이 열렸습니다. (듀얼 모니터에 배치하세요)');
+    } else {
+      showToast('팝업 차단이 감지되었습니다. 브라우저 팝업 허용을 확인해주세요.');
+    }
+  };
+
+  const handleOpenKioskPopup = () => {
+    const success = openKioskPopup();
+    if (success) {
+      showToast('고객용 키오스크 팝업창이 열렸습니다. (키오스크/고객 모니터에 배치하세요)');
     } else {
       showToast('팝업 차단이 감지되었습니다. 브라우저 팝업 허용을 확인해주세요.');
     }
@@ -83,7 +92,32 @@ export const Header: React.FC = () => {
       </nav>
 
       {/* Right Branch & Status info */}
-      <div className="flex items-center gap-3 md:gap-4">
+      <div className="flex items-center gap-2 md:gap-3">
+        {/* Customer Kiosk Buttons */}
+        <div className="flex items-center rounded-lg overflow-hidden border border-white/40 shadow">
+          <button
+            id="btn-nav-kiosk-view"
+            onClick={() => setActiveTab('KIOSK')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs md:text-sm font-bold transition-all ${
+              activeTab === 'KIOSK'
+                ? 'bg-[#153e75] text-white shadow-inner'
+                : 'bg-[#2563eb] hover:bg-[#1d4ed8] text-white'
+            }`}
+            title="고객용 키오스크 화면으로 전환 (화면 내 직접 테스트)"
+          >
+            <Monitor size={15} />
+            <span>키오스크</span>
+          </button>
+          <button
+            id="btn-open-kiosk-popup"
+            onClick={handleOpenKioskPopup}
+            className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white/90 hover:text-white px-2 py-1.5 text-xs font-bold border-l border-white/20"
+            title="고객용 키오스크 새 창/팝업으로 열기 (듀얼 모니터용)"
+          >
+            팝업 ↗
+          </button>
+        </div>
+
         {/* Real Popup Trigger for Call Screen DID */}
         <button
           id="btn-open-call-screen-popup"

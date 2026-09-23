@@ -12,7 +12,8 @@ import {
   QrCode, 
   ShieldCheck, 
   Zap,
-  RotateCcw
+  RotateCcw,
+  ShoppingBag
 } from 'lucide-react';
 import { playKeypadBeep, playPosBeep } from '../utils/audio';
 
@@ -23,6 +24,9 @@ export const PaymentModal: React.FC = () => {
     cart,
     cartTable,
     cartOrderType,
+    takeoutPackaging,
+    setTakeoutPackaging,
+    takeoutPackagingFee,
     completePayment,
     soundEnabled,
     showToast,
@@ -56,9 +60,10 @@ export const PaymentModal: React.FC = () => {
 
   const subtotal = cart.reduce((sum, it) => sum + (it.unitPrice * it.quantity), 0);
   const discountTotal = cart.reduce((sum, it) => sum + (it.discount * it.quantity), 0);
-  const amountDue = Math.max(0, subtotal - discountTotal);
+  const packagingFee = cartOrderType === '포장' && takeoutPackaging === '캐리어' ? 1000 : 0;
+  const amountDue = Math.max(0, subtotal - discountTotal + packagingFee);
 
-  // Reset inputs when modal opens
+  // Reset inputs when modal opens or packaging changes
   useEffect(() => {
     if (isPaymentModalOpen) {
       setReceivedCashInput(String(amountDue));
@@ -68,7 +73,7 @@ export const PaymentModal: React.FC = () => {
       const rand4 = Math.floor(1000 + Math.random() * 9000);
       setCardNumber(`9410-****-****-${rand4}`);
     }
-  }, [isPaymentModalOpen, amountDue, availablePoints]);
+  }, [isPaymentModalOpen, amountDue, availablePoints, takeoutPackaging]);
 
   if (!isPaymentModalOpen) return null;
 
@@ -159,8 +164,14 @@ export const PaymentModal: React.FC = () => {
         {/* Order Summary Ribbon */}
         <div className="bg-[#f0f6fc] border-b border-blue-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-bold text-slate-500">
-              {cartTable ? `[${cartTable.name} 테이블]` : '[카운터]'} • {cartOrderType} • {cart.length}개 품목
+            <div className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+              <span>{cartTable ? `[${cartTable.name} 테이블]` : '[카운터]'}</span>
+              <span>•</span>
+              <span className={cartOrderType === '포장' ? 'text-amber-700 font-black' : ''}>
+                {cartOrderType === '포장' ? '포장(테이크아웃)' : '매장식사'}
+              </span>
+              <span>•</span>
+              <span>{cart.length}개 품목</span>
             </div>
             <div className="text-sm font-black text-slate-800 truncate max-w-xs">
               {cart[0]?.name} {cart.length > 1 ? `외 ${cart.length - 1}건` : ''}
@@ -171,8 +182,72 @@ export const PaymentModal: React.FC = () => {
             <span className="text-2xl font-black text-[#1b5c9c] font-mono">
               ₩ {amountDue.toLocaleString()}
             </span>
+            {cartOrderType === '포장' && (
+              <div className="text-[11px] font-bold text-amber-700">
+                {takeoutPackaging === '캐리어' ? '포장 부자재: 캐리어 (+1,000원 포함)' : '포장 부자재: 일회용비닐 (+0원)'}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* 포장 테이크아웃 부자재 옵션 선택 바 (일회용비닐 +0원 / 캐리어 +1000원) */}
+        {cartOrderType === '포장' && (
+          <div className="bg-amber-50 border-b-2 border-amber-300 px-5 py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2">
+              <ShoppingBag size={18} className="text-amber-700 shrink-0" />
+              <div>
+                <span className="text-xs font-black text-amber-950">포장/테이크아웃 포장재 선택:</span>
+                <span className="text-[11px] text-amber-800 ml-1.5 font-medium">(결제 금액에 실시간 반영)</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                id="btn-takeout-plastic"
+                onClick={() => {
+                  if (soundEnabled) playPosBeep();
+                  setTakeoutPackaging('일회용비닐');
+                  showToast('포장 부자재: 일회용비닐 (+0원)이 선택되었습니다.');
+                }}
+                className={`px-3.5 py-1.5 rounded text-xs font-black transition-all flex items-center gap-1.5 border-2 ${
+                  takeoutPackaging === '일회용비닐'
+                    ? 'bg-[#1f5b94] text-white border-[#164875] shadow-md scale-105'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                  takeoutPackaging === '일회용비닐' ? 'border-white bg-white' : 'border-slate-400'
+                }`}>
+                  {takeoutPackaging === '일회용비닐' && <span className="w-1.5 h-1.5 rounded-full bg-[#1f5b94]" />}
+                </span>
+                <span>일회용비닐 (+0원)</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-takeout-carrier"
+                onClick={() => {
+                  if (soundEnabled) playPosBeep();
+                  setTakeoutPackaging('캐리어');
+                  showToast('포장 부자재: 캐리어 (+1,000원)이 선택되었습니다.');
+                }}
+                className={`px-3.5 py-1.5 rounded text-xs font-black transition-all flex items-center gap-1.5 border-2 ${
+                  takeoutPackaging === '캐리어'
+                    ? 'bg-[#1f5b94] text-white border-[#164875] shadow-md scale-105'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                  takeoutPackaging === '캐리어' ? 'border-white bg-white' : 'border-slate-400'
+                }`}>
+                  {takeoutPackaging === '캐리어' && <span className="w-1.5 h-1.5 rounded-full bg-[#1f5b94]" />}
+                </span>
+                <span>캐리어 (+1000원)</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Method Selection Tabs */}
         <div className="grid grid-cols-5 border-b border-slate-200 bg-slate-100 text-xs font-bold">

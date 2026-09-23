@@ -2,6 +2,7 @@ export type MenuCategory =
   | 'DRINK' 
   | 'DOUGNUT' 
   | 'TEA' 
+  | 'ICE CREAM'
   | 'FRIED' 
   | 'DESERT' 
   | '커피' 
@@ -55,6 +56,13 @@ export interface MenuOption {
   price: number;
 }
 
+export interface MenuIngredient {
+  id: string;
+  name: string;
+  amount?: string;
+  unitPrice?: number;
+}
+
 export interface MenuItem {
   id: string;
   code: string;
@@ -66,6 +74,8 @@ export interface MenuItem {
   barcode: string;
   memo?: string;
   recipe?: string;
+  ingredients?: string[];
+  recipeIngredients?: MenuIngredient[];
   description?: string;
   imageUrl?: string;
   options?: MenuOption[];
@@ -114,6 +124,8 @@ export interface Order {
   changeAmount?: number;
   specialRequests?: string;
   memo?: string;
+  takeoutPackaging?: '일회용비닐 (+0원)' | '캐리어 (+1000원)';
+  takeoutPackagingFee?: number;
   isReservation?: boolean;
   reservationTime?: string;
 }

@@ -57,3 +57,44 @@ export const openCallScreenPopup = (): boolean => {
     }
   }
 };
+
+export const openKioskPopup = (): boolean => {
+  if (typeof window === 'undefined') return false;
+
+  const url = `${window.location.origin}${window.location.pathname}?view=kiosk#kiosk`;
+  const width = Math.min(1366, Math.floor(window.screen.width * 0.9));
+  const height = Math.min(850, Math.floor(window.screen.height * 0.9));
+  const left = Math.max(0, (window.screen.width - width) / 2);
+  const top = Math.max(0, (window.screen.height - height) / 2);
+
+  try {
+    const popup = window.open(
+      url,
+      'KioPosCustomerKioskPopup',
+      `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no,location=no,resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      const fallback = window.open(url, '_blank');
+      if (fallback) {
+        activePopupWindow = fallback;
+      }
+      return !!fallback;
+    }
+
+    activePopupWindow = popup;
+    popup.focus();
+    return true;
+  } catch (err) {
+    console.warn('Failed to open kiosk popup, trying new tab fallback:', err);
+    try {
+      const fallback = window.open(url, '_blank');
+      if (fallback) {
+        activePopupWindow = fallback;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};

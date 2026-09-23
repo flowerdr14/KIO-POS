@@ -67,6 +67,9 @@ interface PosContextType {
   setCartTable: (table: TableItem | null) => void;
   cartOrderType: '매장' | '포장';
   setCartOrderType: (type: '매장' | '포장') => void;
+  takeoutPackaging: '일회용비닐' | '캐리어';
+  setTakeoutPackaging: (opt: '일회용비닐' | '캐리어') => void;
+  takeoutPackagingFee: number;
   completePayment: (
     method: Order['paymentMethod'], 
     receivedCash?: number, 
@@ -131,7 +134,7 @@ const PosContext = createContext<PosContextType | undefined>(undefined);
 
 export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Guaranteed clean slate reset to empty all previous orders and restore original clean prices
-  const CLEAN_SLATE_STAMP = 'kio_pos_v6_no_auto_discount';
+  const CLEAN_SLATE_STAMP = 'kio_pos_v8_icecream_500_700';
   if (typeof window !== 'undefined' && localStorage.getItem('kio_pos_stamp') !== CLEAN_SLATE_STAMP) {
     localStorage.removeItem('kio_pos_orders');
     localStorage.removeItem('kio_pos_reservations');
@@ -426,6 +429,8 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [cartTable, setCartTable] = useState<TableItem | null>(null);
   const [cartOrderType, setCartOrderType] = useState<'매장' | '포장'>('매장');
+  const [takeoutPackaging, setTakeoutPackaging] = useState<'일회용비닐' | '캐리어'>('일회용비닐');
+  const takeoutPackagingFee = cartOrderType === '포장' && takeoutPackaging === '캐리어' ? 1000 : 0;
 
   // Modals state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -559,9 +564,34 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addToCart = (menu: MenuItem, selectedOptions?: string[]) => {
     playBeep();
     
+    // Calculate addedPrice from selected options
+    let addedPrice = 0;
+    if (selectedOptions && selectedOptions.length > 0) {
+      selectedOptions.forEach(optName => {
+        const found = menu.options?.find(o => o.name === optName);
+        if (found !== undefined) {
+          addedPrice += found.price;
+        } else if (optName === '딸기맛 추가') {
+          addedPrice += 0;
+        } else if (optName === '초코맛 추가') {
+          addedPrice += 500;
+        } else if (optName === '초코웨이퍼 추가' || optName === '체리 토핑 추가') {
+          addedPrice += 700;
+        } else if (optName.includes('사이즈 업')) {
+          addedPrice += 1000;
+        } else if (optName.includes('텀블러 할인')) {
+          addedPrice -= 300;
+        } else if (optName.includes('추가') || optName.includes('변경')) {
+          addedPrice += 500;
+        }
+      });
+    }
+
+    const finalUnitPrice = menu.price + addedPrice;
+
     setCart(prev => {
-      const optKey = (selectedOptions || []).sort().join(',');
-      const existingIdx = prev.findIndex(item => item.menuId === menu.id && (item.selectedOptions || []).sort().join(',') === optKey);
+      const optKey = (selectedOptions || []).slice().sort().join(',');
+      const existingIdx = prev.findIndex(item => item.menuId === menu.id && (item.selectedOptions || []).slice().sort().join(',') === optKey);
       
       if (existingIdx > -1) {
         const updated = [...prev];
@@ -580,10 +610,10 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: `ci_${Date.now()}_${Math.random()}`,
           menuId: menu.id,
           name: menu.name,
-          unitPrice: menu.price,
+          unitPrice: finalUnitPrice,
           quantity: 1,
           discount: itemDiscount,
-          totalPrice: Math.max(0, menu.price - itemDiscount),
+          totalPrice: Math.max(0, finalUnitPrice - itemDiscount),
           remark: menu.remark || (menu.remarks && menu.remarks[0]) || '',
           selectedOptions: selectedOptions || []
         };
@@ -681,7 +711,8 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Order => {
     const subtotal = cart.reduce((sum, it) => sum + (it.unitPrice * it.quantity), 0);
     const discountTotal = cart.reduce((sum, it) => sum + (it.discount * it.quantity), 0);
-    const totalAmount = Math.max(0, subtotal - discountTotal);
+    const packagingFee = cartOrderType === '포장' && takeoutPackaging === '캐리어' ? 1000 : 0;
+    const totalAmount = Math.max(0, subtotal - discountTotal + packagingFee);
     const change = method === '현금' || method === '단순현금' ? Math.max(0, receivedCash - totalAmount) : 0;
 
     const orderNum = `A-${String(orders.length + 101).padStart(4, '0')}`;
@@ -708,7 +739,9 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       totalAmount,
       receivedAmount: receivedCash > 0 ? receivedCash : totalAmount,
       changeAmount: change,
-      memo: `${method} 결제`
+      takeoutPackaging: cartOrderType === '포장' ? (takeoutPackaging === '캐리어' ? '캐리어 (+1000원)' : '일회용비닐 (+0원)') : undefined,
+      takeoutPackagingFee: packagingFee,
+      memo: `${method} 결제${cartOrderType === '포장' ? ` (포장재: ${takeoutPackaging === '캐리어' ? '캐리어 +1000원' : '일회용비닐 +0원'})` : ''}`
     };
 
     setOrders(prev => {
@@ -913,6 +946,9 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCartTable,
         cartOrderType,
         setCartOrderType,
+        takeoutPackaging,
+        setTakeoutPackaging,
+        takeoutPackagingFee,
         completePayment,
         shift,
         startShift,

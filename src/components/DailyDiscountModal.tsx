@@ -151,6 +151,7 @@ export const DailyDiscountModal: React.FC = () => {
                 <option value="커피">커피류만 적용</option>
                 <option value="DRINK">DRINK 음료 적용</option>
                 <option value="DOUGNUT">DOUGNUT 도넛 적용</option>
+                <option value="ICE CREAM">ICE CREAM 아이스크림 적용</option>
                 <option value="디저트">디저트 적용</option>
               </select>
             </div>

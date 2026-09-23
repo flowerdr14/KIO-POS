@@ -82,9 +82,16 @@ export const ReceiptModal: React.FC = () => {
     unitPrice: c.unitPrice,
     quantity: c.quantity,
     totalPrice: c.totalPrice,
+    selectedOptions: c.selectedOptions,
   }));
 
-  const itemsToRender = order && order.items.length > 0
+  const itemsToRender: Array<{
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    totalPrice: number;
+    selectedOptions?: string[];
+  }> = order && order.items.length > 0
     ? order.items
     : (activeCartItems.length > 0 ? activeCartItems : []);
 
@@ -208,13 +215,30 @@ export const ReceiptModal: React.FC = () => {
                   </div>
                 ) : (
                   itemsToRender.map((it, idx) => (
-                    <div key={idx} className="grid grid-cols-12 py-1 text-[11px] text-slate-800 items-center">
-                      <span className="col-span-5 font-bold truncate pr-1">{it.name}</span>
-                      <span className="col-span-3 text-right font-mono">{it.unitPrice.toLocaleString()}</span>
-                      <span className="col-span-2 text-right font-mono">{it.quantity}</span>
-                      <span className="col-span-2 text-right font-mono font-bold">{it.totalPrice.toLocaleString()}</span>
+                    <div key={idx} className="py-1 text-[11px] text-slate-800">
+                      <div className="grid grid-cols-12 items-center">
+                        <span className="col-span-5 font-bold truncate pr-1">{it.name}</span>
+                        <span className="col-span-3 text-right font-mono">{it.unitPrice.toLocaleString()}</span>
+                        <span className="col-span-2 text-right font-mono">{it.quantity}</span>
+                        <span className="col-span-2 text-right font-mono font-bold">{it.totalPrice.toLocaleString()}</span>
+                      </div>
+                      {it.selectedOptions && it.selectedOptions.length > 0 && (
+                        <div className="text-[10px] text-slate-500 pl-1">
+                          └ {it.selectedOptions.join(', ')}
+                        </div>
+                      )}
                     </div>
                   ))
+                )}
+                {order?.takeoutPackaging && (
+                  <div className="py-1 text-[11px] text-slate-800 border-t border-dotted border-slate-300">
+                    <div className="grid grid-cols-12 items-center">
+                      <span className="col-span-5 font-bold truncate pr-1">[포장] {order.takeoutPackaging}</span>
+                      <span className="col-span-3 text-right font-mono">{order.takeoutPackagingFee ? order.takeoutPackagingFee.toLocaleString() : '0'}</span>
+                      <span className="col-span-2 text-right font-mono">1</span>
+                      <span className="col-span-2 text-right font-mono font-bold">{order.takeoutPackagingFee ? order.takeoutPackagingFee.toLocaleString() : '0'}</span>
+                    </div>
+                  </div>
                 )}
               </div>
 

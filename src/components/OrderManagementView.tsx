@@ -16,7 +16,8 @@ export const OrderManagementView: React.FC = () => {
     setCartTable,
     tables,
     clearAllOrders,
-    showToast
+    showToast,
+    startEditingOrder
   } = usePos();
 
   const [subTab, setSubTab] = useState<'현황' | '예약' | '메모' | '검색'>('현황');
@@ -490,10 +491,9 @@ export const OrderManagementView: React.FC = () => {
                   <button
                     id="btn-edit-order"
                     onClick={() => {
-                      // Navigate to POS checkout with this order's table
-                      const table = tables.find(t => t.id === selectedOrder.tableId);
-                      if (table) setCartTable(table);
-                      setActiveTab('CHECKOUT');
+                      if (selectedOrder) {
+                        startEditingOrder(selectedOrder);
+                      }
                     }}
                     className="bg-[#2977ca] hover:bg-[#1f63ab] text-white font-bold text-sm md:text-base py-3 rounded-none shadow transition-all active:scale-95 flex items-center justify-center"
                   >
