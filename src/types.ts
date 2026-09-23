@@ -61,6 +61,7 @@ export interface MenuIngredient {
   name: string;
   amount?: string;
   unitPrice?: number;
+  spec?: string;
 }
 
 export interface MenuItem {

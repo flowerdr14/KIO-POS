@@ -70,70 +70,137 @@ export const getDefaultIngredientsForMenu = (menuName: string, category: string,
   ];
 };
 
-export const getIngredientsForMenu = (menuName: string, customIngredients?: MenuIngredient[]): IngredientItem[] => {
+export const getIngredientPriceAndSpec = (name: string, amount?: string): { spec: string; unitPrice: number } => {
+  const n = (name || '').toLowerCase();
+  if (n.includes('원두') || n.includes('에스프레소') || n.includes('커피')) {
+    return { spec: '1kg / 1봉 (에스프레소용)', unitPrice: 24000 };
+  }
+  if (n.includes('우유') || n.includes('밀크')) {
+    return { spec: '10팩 / 1박스 (10L)', unitPrice: 23000 };
+  }
+  if (n.includes('원액') || n.includes('아이스크림')) {
+    return { spec: '10L / 1박스 (상하목장 1등급)', unitPrice: 25000 };
+  }
+  if (n.includes('콘') || n.includes('와플')) {
+    return { spec: '100개입 / 1박스 (수제 와플콘)', unitPrice: 22000 };
+  }
+  if (n.includes('컵') || n.includes('용기') || n.includes('리드') || n.includes('뚜껑')) {
+    return { spec: '500개입 / 1박스 (전용 규격)', unitPrice: 18000 };
+  }
+  if (n.includes('스푼') || n.includes('빨대') || n.includes('스트로우')) {
+    return { spec: '1,000개입 / 1박스', unitPrice: 7000 };
+  }
+  if (n.includes('시럽') || n.includes('소스') || n.includes('퓨레') || n.includes('아이싱')) {
+    return { spec: '1.2kg / 1병 (업소용)', unitPrice: 9000 };
+  }
+  if (n.includes('생지') || n.includes('도넛') || n.includes('도너츠') || n.includes('스콘')) {
+    return { spec: '50개입 / 1박스 (냉동 완제품 생지)', unitPrice: 32000 };
+  }
+  if (n.includes('티백') || n.includes('차') || n.includes('티') || n.includes('잎차')) {
+    return { spec: '50개입 / 1팩 (삼각 피라미드)', unitPrice: 18000 };
+  }
+  if (n.includes('얼음') || n.includes('각얼음')) {
+    return { spec: '10kg / 1포대 (식용 각얼음)', unitPrice: 8000 };
+  }
+  if (n.includes('토핑') || n.includes('스틱') || n.includes('크런치') || n.includes('체리') || n.includes('파우더')) {
+    return { spec: '1kg / 1팩 (토핑용)', unitPrice: 12000 };
+  }
+  if (n.includes('유산지') || n.includes('포장지') || n.includes('슬리브') || n.includes('박스')) {
+    return { spec: '500장 / 1박스 (식품용)', unitPrice: 9500 };
+  }
+  if (n.includes('정제수') || n.includes('물') || n.includes('냉수') || n.includes('온수')) {
+    return { spec: '20L 정수필터 카트리지', unitPrice: 15000 };
+  }
+  return {
+    spec: amount ? `업소용 대용량 (1회 ${amount} 기준)` : '업소용 1박스 / 500개입',
+    unitPrice: 16000,
+  };
+};
+
+export const getIngredientsForMenu = (
+  menuName: string,
+  customIngredients?: MenuIngredient[],
+  recipe?: string
+): IngredientItem[] => {
   if (customIngredients && customIngredients.length > 0) {
-    return customIngredients.map((ci, idx) => ({
-      id: ci.id || `custom_ing_${idx}`,
-      name: ci.name,
-      spec: ci.amount ? `업소용 대용량 (${ci.amount} 규격)` : '1박스 / 500개입',
-      unitPrice: ci.unitPrice || (idx % 2 === 0 ? 18000 : 12000),
-    }));
+    return customIngredients.map((ci, idx) => {
+      const { spec, unitPrice } = getIngredientPriceAndSpec(ci.name, ci.amount);
+      const recipeAmountText = ci.amount ? ` [1회 ${ci.amount}]` : '';
+      return {
+        id: ci.id || `custom_ing_${idx}`,
+        name: ci.name,
+        spec: (ci.spec || spec) + recipeAmountText,
+        unitPrice: ci.unitPrice || unitPrice,
+      };
+    });
+  }
+  if (recipe && recipe.includes('+')) {
+    return recipe.split('+').map((part, idx) => {
+      const trimmed = part.trim();
+      const { spec, unitPrice } = getIngredientPriceAndSpec(trimmed);
+      return {
+        id: `recipe_part_${idx}`,
+        name: trimmed,
+        spec: `${spec} [레시피: ${trimmed}]`,
+        unitPrice,
+      };
+    });
   }
   if (menuName.includes('아이스크림 (컵)')) {
     return [
-      { id: 'ing_cup_1', name: '소프트 아이스크림 원액 (상하목장 1등급)', spec: '10L / 1박스', unitPrice: 25000 },
-      { id: 'ing_cup_2', name: '아이스크림 전용 투명 컵 & 스푼 세트', spec: '500개입 / 1박스', unitPrice: 18000 },
-      { id: 'ing_cup_3', name: '딸기맛 시럽 & 퓨레 베이스', spec: '1.2kg / 1병', unitPrice: 8500 },
-      { id: 'ing_cup_4', name: '진한 초콜릿 디핑 소스/시럽', spec: '1.2kg / 1병', unitPrice: 9000 },
-      { id: 'ing_cup_5', name: '바삭 초코웨이퍼 롱스틱 토핑', spec: '1kg / 1봉지', unitPrice: 12000 },
-      { id: 'ing_cup_6', name: '마라스키노 체리 통조림 토핑', spec: '1kg / 1캔', unitPrice: 14000 },
+      { id: 'ing_cup_1', name: '소프트 아이스크림 원액 (상하목장 1등급)', spec: '10L / 1박스 [1회 180ml]', unitPrice: 25000 },
+      { id: 'ing_cup_2', name: '아이스크림 전용 투명 컵 & 스푼 세트', spec: '500개입 / 1박스 [1회 1세트]', unitPrice: 18000 },
+      { id: 'ing_cup_3', name: '딸기맛 시럽 & 퓨레 베이스', spec: '1.2kg / 1병 [옵션 추가용]', unitPrice: 8500 },
+      { id: 'ing_cup_4', name: '진한 초콜릿 디핑 소스/시럽', spec: '1.2kg / 1병 [옵션 추가용]', unitPrice: 9000 },
+      { id: 'ing_cup_5', name: '바삭 초코웨이퍼 롱스틱 토핑', spec: '1kg / 1봉지 [1회 1개]', unitPrice: 12000 },
+      { id: 'ing_cup_6', name: '마라스키노 체리 통조림 토핑', spec: '1kg / 1캔 [1회 1알]', unitPrice: 14000 },
     ];
   }
   if (menuName.includes('아이스크림 (콘)')) {
     return [
-      { id: 'ing_cone_1', name: '수제 바삭 버터 와플 콘', spec: '100개입 / 1박스', unitPrice: 22000 },
-      { id: 'ing_cone_2', name: '소프트 아이스크림 원액 (상하목장 1등급)', spec: '10L / 1박스', unitPrice: 25000 },
-      { id: 'ing_cone_3', name: '와플 콘 전용 로고 종이 슬리브', spec: '500개입 / 1박스', unitPrice: 9500 },
-      { id: 'ing_cone_4', name: '딸기맛 시럽 & 퓨레 베이스', spec: '1.2kg / 1병', unitPrice: 8500 },
-      { id: 'ing_cone_5', name: '진한 초콜릿 디핑 소스/시럽', spec: '1.2kg / 1병', unitPrice: 9000 },
-      { id: 'ing_cone_6', name: '바삭 초코웨이퍼 롱스틱 토핑', spec: '1kg / 1봉지', unitPrice: 12000 },
-      { id: 'ing_cone_7', name: '마라스키노 체리 통조림 토핑', spec: '1kg / 1캔', unitPrice: 14000 },
+      { id: 'ing_cone_1', name: '수제 바삭 버터 와플 콘', spec: '100개입 / 1박스 [1회 1개]', unitPrice: 22000 },
+      { id: 'ing_cone_2', name: '소프트 아이스크림 원액 (상하목장 1등급)', spec: '10L / 1박스 [1회 170ml]', unitPrice: 25000 },
+      { id: 'ing_cone_3', name: '와플 콘 전용 로고 종이 슬리브', spec: '500개입 / 1박스 [1회 1장]', unitPrice: 9500 },
+      { id: 'ing_cone_4', name: '딸기맛 시럽 & 퓨레 베이스', spec: '1.2kg / 1병 [옵션 추가용]', unitPrice: 8500 },
+      { id: 'ing_cone_5', name: '진한 초콜릿 디핑 소스/시럽', spec: '1.2kg / 1병 [옵션 추가용]', unitPrice: 9000 },
+      { id: 'ing_cone_6', name: '바삭 초코웨이퍼 롱스틱 토핑', spec: '1kg / 1봉지 [1회 1개]', unitPrice: 12000 },
+      { id: 'ing_cone_7', name: '마라스키노 체리 통조림 토핑', spec: '1kg / 1캔 [1회 1알]', unitPrice: 14000 },
     ];
   }
   if (menuName.includes('아메리카노') || menuName.includes('커피')) {
     return [
-      { id: 'ing_ame_1', name: '에스프레소 시그니처 블렌드 원두', spec: '1kg / 1봉', unitPrice: 24000 },
-      { id: 'ing_ame_2', name: '16oz 테이크아웃 컵 & 리드 세트', spec: '500개입 / 1박스', unitPrice: 19000 },
-      { id: 'ing_ame_3', name: '친환경 생분해 종이 빨대', spec: '1,000개입 / 1박스', unitPrice: 7000 },
-      { id: 'ing_ame_4', name: '크라프트 컵홀더 & 2구 캐리어', spec: '500개입 / 1박스', unitPrice: 9500 },
+      { id: 'ing_ame_1', name: '에스프레소 시그니처 블렌드 원두', spec: '1kg / 1봉 [1회 2샷(30g)]', unitPrice: 24000 },
+      { id: 'ing_ame_2', name: '16oz 테이크아웃 컵 & 리드 세트', spec: '500개입 / 1박스 [1회 1세트]', unitPrice: 19000 },
+      { id: 'ing_ame_3', name: '친환경 생분해 종이 빨대', spec: '1,000개입 / 1박스 [1회 1개]', unitPrice: 7000 },
+      { id: 'ing_ame_4', name: '크라프트 컵홀더 & 2구 캐리어', spec: '500개입 / 1박스 [1회 1개]', unitPrice: 9500 },
     ];
   }
   if (menuName.includes('라떼') || menuName.includes('카푸치노')) {
     return [
-      { id: 'ing_lat_1', name: '에스프레소 시그니처 블렌드 원두', spec: '1kg / 1봉', unitPrice: 24000 },
-      { id: 'ing_lat_2', name: '바리스타 전용 신선 매일우유 1L', spec: '10팩 / 1박스', unitPrice: 23000 },
-      { id: 'ing_lat_3', name: '프리미엄 바닐라 시럽', spec: '1L / 1병', unitPrice: 11000 },
-      { id: 'ing_lat_4', name: '카푸치노 전용 시나몬 파우더', spec: '500g / 1통', unitPrice: 6500 },
+      { id: 'ing_lat_1', name: '에스프레소 시그니처 블렌드 원두', spec: '1kg / 1봉 [1회 2샷(30g)]', unitPrice: 24000 },
+      { id: 'ing_lat_2', name: '바리스타 전용 신선 매일우유 1L', spec: '10팩 / 1박스 [1회 200ml]', unitPrice: 23000 },
+      { id: 'ing_lat_3', name: '프리미엄 바닐라 시럽', spec: '1L / 1병 [옵션 1펌프]', unitPrice: 11000 },
+      { id: 'ing_lat_4', name: '카푸치노 전용 시나몬 파우더', spec: '500g / 1통 [토핑용]', unitPrice: 6500 },
     ];
   }
   if (menuName.includes('도넛') || menuName.includes('DOUGNUT')) {
     return [
-      { id: 'ing_dnt_1', name: '수제 도넛 전용 프리미엄 냉동 생지', spec: '50개입 / 1박스', unitPrice: 32000 },
-      { id: 'ing_dnt_2', name: '글레이즈 슈가 코팅 시럽 & 아이싱', spec: '2kg / 1통', unitPrice: 12000 },
-      { id: 'ing_dnt_3', name: '도넛 전용 선물 박스 & 유산지', spec: '200세트 / 1박스', unitPrice: 16000 },
-      { id: 'ing_dnt_4', name: '초콜릿 드리즐 & 크런치 토핑', spec: '1kg / 1팩', unitPrice: 11000 },
+      { id: 'ing_dnt_1', name: '수제 도넛 전용 프리미엄 냉동 생지', spec: '50개입 / 1박스 [1회 1개]', unitPrice: 32000 },
+      { id: 'ing_dnt_2', name: '글레이즈 슈가 코팅 시럽 & 아이싱', spec: '2kg / 1통 [1회 20g]', unitPrice: 12000 },
+      { id: 'ing_dnt_3', name: '도넛 전용 선물 박스 & 유산지', spec: '200세트 / 1박스 [1회 1장]', unitPrice: 16000 },
+      { id: 'ing_dnt_4', name: '초콜릿 드리즐 & 크런치 토핑', spec: '1kg / 1팩 [토핑용]', unitPrice: 11000 },
     ];
   }
   if (menuName.includes('티') || menuName.includes('TEA') || menuName.includes('캐모마일') || menuName.includes('얼그레이')) {
     return [
-      { id: 'ing_tea_1', name: '유기농 삼각 피라미드 티백 세트', spec: '50개입 / 1팩', unitPrice: 18000 },
-      { id: 'ing_tea_2', name: '벌꿀 & 아카시아 액상 스위트너', spec: '1kg / 1통', unitPrice: 8500 },
-      { id: 'ing_tea_3', name: '말린 레몬 슬라이스 & 허브 토핑', spec: '200g / 1봉', unitPrice: 9000 },
-      { id: 'ing_tea_4', name: '내열 종이컵 & 전용 리드 (13oz)', spec: '500개입 / 1박스', unitPrice: 17000 },
+      { id: 'ing_tea_1', name: '유기농 삼각 피라미드 티백 세트', spec: '50개입 / 1팩 [1회 1팩]', unitPrice: 18000 },
+      { id: 'ing_tea_2', name: '벌꿀 & 아카시아 액상 스위트너', spec: '1kg / 1통 [스위트너]', unitPrice: 8500 },
+      { id: 'ing_tea_3', name: '말린 레몬 슬라이스 & 허브 토핑', spec: '200g / 1봉 [가니쉬]', unitPrice: 9000 },
+      { id: 'ing_tea_4', name: '내열 종이컵 & 전용 리드 (13oz)', spec: '500개입 / 1박스 [1회 1세트]', unitPrice: 17000 },
     ];
   }
   return [
-    { id: `ing_gen_1_${menuName}`, name: `${menuName} 전용 제조 베이스 원재료`, spec: '1박스', unitPrice: 22000 },
+    { id: `ing_gen_1_${menuName}`, name: `${menuName} 전용 제조 베이스 원재료`, spec: '1박스 (업소용)', unitPrice: 22000 },
     { id: `ing_gen_2_${menuName}`, name: `${menuName} 전용 포장 용기 & 스푼/스트로우`, spec: '500세트 / 1박스', unitPrice: 15000 },
     { id: `ing_gen_3_${menuName}`, name: '토핑용 부재료 & 파우더 믹스', spec: '1kg / 1봉', unitPrice: 8500 },
     { id: `ing_gen_4_${menuName}`, name: '전용 소스 & 시럽', spec: '1.2kg / 1통', unitPrice: 9500 },
@@ -181,34 +248,86 @@ export const MenuManagementView: React.FC = () => {
       return;
     }
     const targetAmount = (amount !== undefined ? amount : newIngAmount).trim() || '1회분';
+    const newId = `ing_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const { spec, unitPrice } = getIngredientPriceAndSpec(targetName, targetAmount);
     const newIng: MenuIngredient = {
-      id: `ing_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      id: newId,
       name: targetName,
       amount: targetAmount,
+      spec,
+      unitPrice,
     };
-    setFormIngredients((prev) => [...prev, newIng]);
+    const updated = [...formIngredients, newIng];
+    setFormIngredients(updated);
+
+    // Auto-check this newly added ingredient in the order list and set default qty
+    setSelectedIngredientIds((prev) => Array.from(new Set([...prev, newId])));
+    setIngredientQuantities((prev) => ({ ...prev, [newId]: 1 }));
+
+    // Instant sync to selected menu item in posContext and localStorage
+    if (selectedItem) {
+      updateMenuItem(selectedItem.id, {
+        recipeIngredients: updated,
+        ingredients: updated.map((i) => i.name),
+        recipe: updated.map((i) => `${i.name} ${i.amount || ''}`.trim()).join(' + '),
+      });
+    }
+
     if (name === undefined) {
       setNewIngName('');
       setNewIngAmount('');
     }
-    showToast(`'${targetName}' (${targetAmount}) 재료가 추가되었습니다.`);
+    showToast(`'${targetName}' (${targetAmount}) 재료가 추가되고 발주 목록에 실시간 연동되었습니다.`);
   };
 
   const handleRemoveIngredient = (id: string) => {
-    setFormIngredients((prev) => prev.filter((i) => i.id !== id));
+    const updated = formIngredients.filter((i) => i.id !== id);
+    setFormIngredients(updated);
+    setSelectedIngredientIds((prev) => prev.filter((i) => i !== id));
+    if (selectedItem) {
+      updateMenuItem(selectedItem.id, {
+        recipeIngredients: updated,
+        ingredients: updated.map((i) => i.name),
+        recipe: updated.map((i) => `${i.name} ${i.amount || ''}`.trim()).join(' + '),
+      });
+    }
+    showToast('재료가 삭제되었으며 발주 목록에서도 제외되었습니다.');
   };
 
   const handleUpdateIngredient = (id: string, field: 'name' | 'amount', value: string) => {
-    setFormIngredients((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: value } : i))
-    );
+    const updated = formIngredients.map((i) => {
+      if (i.id !== id) return i;
+      const next = { ...i, [field]: value };
+      if (field === 'name') {
+        const { spec, unitPrice } = getIngredientPriceAndSpec(value, next.amount);
+        next.spec = spec;
+        next.unitPrice = unitPrice;
+      }
+      return next;
+    });
+    setFormIngredients(updated);
+    if (selectedItem) {
+      updateMenuItem(selectedItem.id, {
+        recipeIngredients: updated,
+        ingredients: updated.map((i) => i.name),
+        recipe: updated.map((i) => `${i.name} ${i.amount || ''}`.trim()).join(' + '),
+      });
+    }
   };
 
   const handleResetDefaultIngredients = () => {
     if (!formName.trim()) return;
     const defaults = getDefaultIngredientsForMenu(formName, formCategory, selectedItem?.recipe);
     setFormIngredients(defaults);
-    showToast(`'${formName}'의 기본 추천 재료(${defaults.length}개)가 설정되었습니다.`);
+    setSelectedIngredientIds(defaults.map((i) => i.id));
+    if (selectedItem) {
+      updateMenuItem(selectedItem.id, {
+        recipeIngredients: defaults,
+        ingredients: defaults.map((i) => i.name),
+        recipe: defaults.map((i) => `${i.name} ${i.amount || ''}`.trim()).join(' + '),
+      });
+    }
+    showToast(`'${formName}'의 기본 추천 재료(${defaults.length}개)가 발주 목록에 연동되었습니다.`);
   };
 
   // 우리 매장 배송 주소
@@ -217,24 +336,50 @@ export const MenuManagementView: React.FC = () => {
   // 재료 발주하기 (Material Ordering) State
   const [orderSupplier, setOrderSupplier] = useState<'키오포스도매매장' | '스타로벅스재료발주매장'>('키오포스도매매장');
   const [orderMenuId, setOrderMenuId] = useState<string>(() => {
-    const ice = menuItems.find((m) => m.name.includes('아이스크림'));
-    return ice ? ice.id : (menuItems[0]?.id || '');
+    return selectedItem?.id || menuItems[0]?.id || '';
   });
 
   // Find active menu for order
-  const activeOrderMenu = menuItems.find((m) => m.id === orderMenuId) || menuItems[0];
-  const currentIngredients = activeOrderMenu
-    ? getIngredientsForMenu(activeOrderMenu.name, activeOrderMenu.recipeIngredients)
-    : [];
+  const activeOrderMenu = menuItems.find((m) => m.id === orderMenuId) || selectedItem || menuItems[0];
+
+  // Current ingredients for ordering:
+  // If the active menu for order is the currently selected menu in the detail panel, directly use formIngredients for instant live preview!
+  const currentIngredients = React.useMemo(() => {
+    if (!activeOrderMenu) return [];
+    if (selectedItem && selectedItem.id === activeOrderMenu.id && formIngredients.length > 0) {
+      return getIngredientsForMenu(selectedItem.name, formIngredients, selectedItem.recipe);
+    }
+    const ings = activeOrderMenu.recipeIngredients && activeOrderMenu.recipeIngredients.length > 0
+      ? activeOrderMenu.recipeIngredients
+      : undefined;
+    return getIngredientsForMenu(activeOrderMenu.name, ings, activeOrderMenu.recipe);
+  }, [activeOrderMenu, selectedItem, formIngredients]);
 
   // Selected ingredients state (list of ingredient IDs)
   const [selectedIngredientIds, setSelectedIngredientIds] = useState<string[]>(() => {
     const initial = activeOrderMenu
-      ? getIngredientsForMenu(activeOrderMenu.name, activeOrderMenu.recipeIngredients)
+      ? (formIngredients.length > 0
+          ? getIngredientsForMenu(activeOrderMenu.name, formIngredients, activeOrderMenu.recipe)
+          : getIngredientsForMenu(activeOrderMenu.name, activeOrderMenu.recipeIngredients, activeOrderMenu.recipe))
       : [];
-    return initial.slice(0, 2).map((i) => i.id);
+    return initial.map((i) => i.id);
   });
   const [ingredientQuantities, setIngredientQuantities] = useState<Record<string, number>>({});
+
+  // Ensure all ingredients are selected or kept in sync when ingredients change
+  React.useEffect(() => {
+    if (currentIngredients.length > 0) {
+      setSelectedIngredientIds((prev) => {
+        if (prev.length === 0) {
+          return currentIngredients.map((i) => i.id);
+        }
+        // Include any new ingredient IDs that were added
+        const validExisting = prev.filter((id) => currentIngredients.some((ing) => ing.id === id));
+        const newIds = currentIngredients.map((i) => i.id).filter((id) => !prev.includes(id));
+        return [...validExisting, ...newIds];
+      });
+    }
+  }, [currentIngredients]);
 
   // Success Confirmation Modal
   const [orderSuccessModal, setOrderSuccessModal] = useState<{
@@ -250,10 +395,7 @@ export const MenuManagementView: React.FC = () => {
     setOrderMenuId(newMenuId);
     const targetMenu = menuItems.find((m) => m.id === newMenuId);
     if (targetMenu) {
-      const ings = getIngredientsForMenu(targetMenu.name, targetMenu.recipeIngredients);
-      setSelectedIngredientIds(ings.slice(0, 2).map((i) => i.id));
-    } else {
-      setSelectedIngredientIds([]);
+      handleSelectItem(targetMenu);
     }
   };
 
@@ -333,9 +475,10 @@ export const MenuManagementView: React.FC = () => {
 
   const hasDiscountRemark = formRemarks.some(isDiscountRelatedRemark);
 
-  // When selection changes, update form fields
+  // When selection changes, update form fields and sync order section
   const handleSelectItem = (item: MenuItem) => {
     setSelectedItem(item);
+    setOrderMenuId(item.id);
     setFormName(item.name);
     setFormCategory(item.category);
     setFormPrice(item.price);
@@ -349,17 +492,20 @@ export const MenuManagementView: React.FC = () => {
     setFormDiscountAmount(item.discountAmount || 0);
 
     // Load recipe ingredients
+    let ings: MenuIngredient[] = [];
     if (item.recipeIngredients && item.recipeIngredients.length > 0) {
-      setFormIngredients(item.recipeIngredients);
+      ings = item.recipeIngredients;
     } else if (item.ingredients && item.ingredients.length > 0) {
-      setFormIngredients(item.ingredients.map((ing, idx) => ({
-        id: `ing_${idx}_${Date.now()}`,
+      ings = item.ingredients.map((ing, idx) => ({
+        id: `ing_${item.id}_${idx}`,
         name: ing,
         amount: '1회분'
-      })));
+      }));
     } else {
-      setFormIngredients(getDefaultIngredientsForMenu(item.name, item.category, item.recipe));
+      ings = getDefaultIngredientsForMenu(item.name, item.category, item.recipe);
     }
+    setFormIngredients(ings);
+    setSelectedIngredientIds(ings.map((i) => i.id));
     setNewIngName('');
     setNewIngAmount('');
   };
@@ -701,14 +847,19 @@ export const MenuManagementView: React.FC = () => {
                 {/* 재료 선택 영역 ("내가 직접 발주할 재료만 선택") */}
                 <div className="border border-slate-300 rounded bg-white p-2 flex flex-col gap-1.5 shadow-xs">
                   <div className="flex items-center justify-between pb-1 border-b border-slate-200 text-[11px]">
-                    <span className="font-bold text-slate-800 flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <PackageCheck size={14} className="text-[#1b5c9c]" />
-                      <span>[{activeOrderMenu?.name}] 발주할 재료 선택</span>
+                      <span className="font-bold text-slate-800">
+                        [{(selectedItem && selectedItem.id === activeOrderMenu?.id ? formName : activeOrderMenu?.name)}] 발주할 재료 선택
+                      </span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded border border-emerald-300">
+                        🔗 메뉴 상세정보 실시간 연동
+                      </span>
                       <span className="text-[10px] text-slate-500 font-normal">
                         ({selectedIngredientIds.length}/{currentIngredients.length}개 선택됨)
                       </span>
-                    </span>
-                    <div className="flex gap-1 text-[10px]">
+                    </div>
+                    <div className="flex gap-1 text-[10px] shrink-0">
                       <button
                         type="button"
                         onClick={handleSelectAllIngredients}
@@ -727,66 +878,110 @@ export const MenuManagementView: React.FC = () => {
                   </div>
 
                   {/* 재료 리스트 */}
-                  <div className="max-h-[135px] overflow-y-auto divide-y divide-slate-100 pr-1">
-                    {currentIngredients.map((ing) => {
-                      const isChecked = selectedIngredientIds.includes(ing.id);
-                      const qty = ingredientQuantities[ing.id] || 1;
-                      const lineTotal = ing.unitPrice * qty;
+                  <div className="max-h-[140px] overflow-y-auto divide-y divide-slate-100 pr-1">
+                    {currentIngredients.length === 0 ? (
+                      <div className="p-3 text-center text-slate-400 text-xs bg-slate-50 rounded border border-dashed border-slate-200">
+                        등록된 만들기 재료가 없습니다. 아래 또는 메뉴 상세정보에서 재료를 추가해주세요.
+                      </div>
+                    ) : (
+                      currentIngredients.map((ing) => {
+                        const isChecked = selectedIngredientIds.includes(ing.id);
+                        const qty = ingredientQuantities[ing.id] || 1;
+                        const lineTotal = ing.unitPrice * qty;
 
-                      return (
-                        <div
-                          key={ing.id}
-                          className={`py-1 px-1.5 flex items-center justify-between gap-1.5 rounded transition-colors ${
-                            isChecked ? 'bg-blue-50/80 text-slate-900 font-bold' : 'text-slate-500 hover:bg-slate-50'
-                          }`}
-                        >
-                          <label className="flex items-center gap-1.5 cursor-pointer flex-1 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleToggleIngredient(ing.id)}
-                              className="w-3.5 h-3.5 text-[#1b5c9c] rounded border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
-                            />
-                            <div className="truncate">
-                              <span className="text-xs">{ing.name}</span>
-                              <span className="text-[10px] text-slate-400 font-normal ml-1">({ing.spec})</span>
-                            </div>
-                          </label>
+                        return (
+                          <div
+                            key={ing.id}
+                            className={`py-1 px-1.5 flex items-center justify-between gap-1.5 rounded transition-colors ${
+                              isChecked ? 'bg-blue-50/80 text-slate-900 font-bold' : 'text-slate-500 hover:bg-slate-50'
+                            }`}
+                          >
+                            <label className="flex items-center gap-1.5 cursor-pointer flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => handleToggleIngredient(ing.id)}
+                                className="w-3.5 h-3.5 text-[#1b5c9c] rounded border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
+                              />
+                              <div className="truncate">
+                                <span className="text-xs">{ing.name}</span>
+                                <span className="text-[10px] text-slate-400 font-normal ml-1">({ing.spec})</span>
+                              </div>
+                            </label>
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="font-mono text-[11px] text-slate-600">
-                              {ing.unitPrice.toLocaleString()}원
-                            </span>
-
-                            <div className="flex items-center border border-slate-300 rounded bg-white">
-                              <button
-                                type="button"
-                                disabled={!isChecked}
-                                onClick={() => handleQtyChange(ing.id, -1)}
-                                className="w-4 h-4 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-20 text-xs"
-                              >
-                                -
-                              </button>
-                              <span className="w-5 text-center font-mono text-[11px] font-bold">
-                                {qty}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="font-mono text-[11px] text-slate-600">
+                                {ing.unitPrice.toLocaleString()}원
                               </span>
-                              <button
-                                type="button"
-                                disabled={!isChecked}
-                                onClick={() => handleQtyChange(ing.id, 1)}
-                                className="w-4 h-4 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-20 text-xs"
-                              >
-                                +
-                              </button>
-                            </div>
 
-                            <span className="font-mono text-xs font-black text-[#1b5c9c] w-14 text-right">
-                              ₩ {lineTotal.toLocaleString()}
-                            </span>
+                              <div className="flex items-center border border-slate-300 rounded bg-white">
+                                <button
+                                  type="button"
+                                  disabled={!isChecked}
+                                  onClick={() => handleQtyChange(ing.id, -1)}
+                                  className="w-4 h-4 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-20 text-xs"
+                                >
+                                  -
+                                </button>
+                                <span className="w-5 text-center font-mono text-[11px] font-bold">
+                                  {qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={!isChecked}
+                                  onClick={() => handleQtyChange(ing.id, 1)}
+                                  className="w-4 h-4 flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-20 text-xs"
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              <span className="font-mono text-xs font-black text-[#1b5c9c] w-14 text-right">
+                                ₩ {lineTotal.toLocaleString()}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Quick Add Ingredient from Order panel */}
+                  <div className="pt-1.5 border-t border-slate-200 flex items-center gap-1.5 text-xs bg-blue-50/30 p-1 rounded">
+                    <span className="text-[11px] font-bold text-slate-700 shrink-0">＋ 발주 재료 추가:</span>
+                    <input
+                      type="text"
+                      placeholder="새 재료명 (예: 바닐라 시럽, 원두)"
+                      value={newIngName}
+                      onChange={(e) => setNewIngName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddIngredient();
+                        }
+                      }}
+                      className="flex-1 border border-slate-200 rounded px-1.5 py-0.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="1회분"
+                      value={newIngAmount}
+                      onChange={(e) => setNewIngAmount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddIngredient();
+                        }
+                      }}
+                      className="w-16 border border-slate-200 rounded px-1.5 py-0.5 text-xs bg-white text-right focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddIngredient()}
+                      className="px-2.5 py-0.5 bg-[#2977ca] hover:bg-[#1f63ab] text-white rounded font-bold text-xs shrink-0 shadow-xs"
+                    >
+                      추가
+                    </button>
                   </div>
                 </div>
 
