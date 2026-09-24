@@ -53,6 +53,7 @@ interface PosContextType {
   cancelOrder: (orderId: string) => void;
   updateOrderMemo: (orderId: string, memo: string) => void;
   updateOrderSpecialRequests: (orderId: string, req: string) => void;
+  startEditingOrder: (order: Order) => void;
   
   // Active Checkout Cart
   cart: OrderItem[];
@@ -560,6 +561,22 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('요청사항이 수정되었습니다.');
   };
 
+  const startEditingOrder = (order: Order) => {
+    setCart(order.items.map(item => ({ ...item })));
+    if (order.tableId) {
+      const table = tables.find(t => t.id === order.tableId) || null;
+      setCartTable(table);
+    } else {
+      const table = tables.find(t => t.name === order.tableName) || null;
+      setCartTable(table);
+    }
+    setCartOrderType(order.orderType === '포장' ? '포장' : '매장');
+    setSelectedOrder(order);
+    setActiveTab('CHECKOUT');
+    playBeep();
+    showToast(`주문 #${order.orderNumber}을(를) 수정하기 위해 계산대로 불러왔습니다.`);
+  };
+
   // Cart operations
   const addToCart = (menu: MenuItem, selectedOptions?: string[]) => {
     playBeep();
@@ -934,6 +951,7 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelOrder,
         updateOrderMemo,
         updateOrderSpecialRequests,
+        startEditingOrder,
         cart,
         addToCart,
         removeFromCart,
